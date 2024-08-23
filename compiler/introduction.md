@@ -6,6 +6,8 @@ This course will walk you through how to build a interpreter/compiler.
 The first chapter will show how to make a simple polish notation calculator.
 The latter chapters will show how to specify and implement a complete programming language.
 
+I will be using Javascript and Typescript as reference implementation language. This is not required. I'd highly recommend you try to implement the concepts in another language, so that you understand the concepts, not just copy the source code.
+
 ## Exercises
 
 You should attempt and should be able to do all exercises not marked \*.
