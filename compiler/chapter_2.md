@@ -72,7 +72,7 @@ class Lexer {
     private step() { /*...*/ }
     private done(): bool { return this.index >= this.text.length; }
     private current(): string { return this.text[this.index]; }
-            // ...
+    // ...
 }
 ```
 
