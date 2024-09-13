@@ -401,11 +401,9 @@ class Parser {
 
 Similarly to index epxressions, if we find a `(`-token, we step over it, parse the arguments, check for a `)` and replace `subject` with a call expression containing the previous `subject`.
 
-When parsing the arguments, we start by testing if we've reached a `)` to check if there are any arguments. If not, we parse the first argument.
+When parsing the arguments, we start by testing if we've reached a `)` to check if there are any arguments. If not, we parse the first argument. 
+The consecutive arguments are all preceded by a `,`-token. There we test or `,`, to check if we should keep parsing arguments. After checking for a seperating `,`, we check if we've reached a `)` and break if so. This is to allow for trailing comma.
 
-The consecutive arguments are all preceded by a `,`-token. There we test or `,`, to check if we should keep parsing arguments.
-
-After checking for a seperating `,`, we check if we've reached a `)` and break if so. This is to allow for trailing comma, eg.
 ```ts
 func(
     a,
@@ -413,9 +411,98 @@ func(
 )
 ```
 
-### 3.5 Prefix expressions
+## 3.5 Prefix expressions
 
+Contrasting postfix expressions, prefix expression are operations where the operator comes first, then the operands are listed. In some languages, operations such as negation (eg. `-value`) and not-operations (eg. `!value`) are prefix operations. In the language we're making, all binary and unary arithmetic operations are prefix. This includes both expressions with a single operand, such as not (eg. `not value`), but also expressions with 2 operands, such ass addition (eg. `+ a b`) and equation (eg. `== a b`).
 
+This is because infix operators (eg. `a + b`) makes parsing more complicated, as it requires reasoning about operator precedence, eg. why `2 + 3 * 4 != (2 + 3) * 4`.
 
+Operations with 1 operand are called unary expression. Operations with 2 are called binary expressions.
 
+```ts
+type ExprKind =
+    // ...
+    | { type: "unary", unaryType: UnaryType, subject: Expr }
+    | { type: "binary", binaryType: BinaryType, left: Expr, right: Expr }
+    // ...
+    ;
+
+type UnaryType = "not" /*...*/;
+type BinaryType = "+" | "*" | "==" /*...*/;
+```
+
+```ts
+class Parser {
+    // ...
+    public parsePrefix(): Expr {
+        const pos = this.pos();
+        // ...
+        return this.parsePostfix();
+    }
+    // ...
+}
+```
+
+We again get the position immediately, because the operation, eg. `+ a b`, starts at the first `+`-token.
+
+If we don't find any operators, we proceed to try to parse a postfix expression.
+
+### 3.5.1 Unary expressions
+
+```ts
+class Parser {
+    // ...
+    public parsePrefix(): Expr {
+        // ...
+        if (this.test("not")) {
+            this.step();
+            const subject = this.parsePrefix();
+            return { kind: { type: "unary", unaryType: "not", subject }, pos };
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+If we find a `not`-token, we ignore it, parse a prefix expression recursively, and return a unary expression with the `subject` and unary type.
+
+### 3.5.2 Binary expressions
+
+```ts
+class Parser {
+    // ...
+    public parsePrefix(): Expr {
+        // ...
+        if (this.test("+")) {
+            this.step();
+            const left = this.parsePrefix();
+            const right = this.parsePrefix();
+            return { kind: { type: "binary", binaryType: "+", left, right }, pos };
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+Just as with unary, if we find a `+`-token, we ignore it and parse prefix expression recursively. Then we parse the second operand, by parsing another prefix expressions. And then we return a binary expression with the `left` and `right` operands and the binary type.
+
+## 3.6 Expressions
+
+Lastly for expressions, we'll make a method `.parseExpr()` for parsing an expression.
+
+```ts
+class Parser {
+    // ...
+    public parseExpr(): Expr {
+        return this.parsePrefix();
+    }
+    // ...
+}
+```
+
+The method just proceeds to try and parse a prefix expression.
+
+## 3.7 If
 
