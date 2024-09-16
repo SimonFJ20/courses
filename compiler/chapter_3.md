@@ -411,6 +411,8 @@ func(
 )
 ```
 
+PS. it's called arguments in a function call. We call with arguments, and define with parameters.
+
 ## 3.5 Prefix expressions
 
 Contrasting postfix expressions, prefix expression are operations where the operator comes first, then the operands are listed. In some languages, operations such as negation (eg. `-value`) and not-operations (eg. `!value`) are prefix operations. In the language we're making, all binary and unary arithmetic operations are prefix. This includes both expressions with a single operand, such as not (eg. `not value`), but also expressions with 2 operands, such ass addition (eg. `+ a b`) and equation (eg. `== a b`).
@@ -504,5 +506,222 @@ class Parser {
 
 The method just proceeds to try and parse a prefix expression.
 
-## 3.7 If
+## 3.7 If expressions
+
+An if-expression is an `if`-token, followed by an condition in the form of an expressions, followed by a block-expression, optionally followed by an `else`-token and another block.
+
+```ts
+type ExprKind =
+    // ...
+    | { type: "if", cond: Expr, truthy: Expr, falsy?: Expr }
+    // ...
+    ;
+```
+
+```ts
+class Parser {
+    // ...
+    public parseIf(): Expr {
+        const pos = this.pos();
+        this.step();
+        const cond = this.parseExpr();
+        if (!this.test("{")) {
+            this.report("expected '}'");
+            return { kind: { type: "error" }, pos };
+        }
+        const truthy = this.parseBlock();
+        if (!this.test("else")) {
+            return { kind: { type: "if", cond, truthy }, pos };
+        }
+        this.step();
+        if (!this.test("{")) {
+            this.report("expected '}'");
+            return { kind: { type: "error" }, pos };
+        }
+        const falsy = this.parseBlock();
+        return { kind: { type: "if", cond, truthy, falsy }, pos };
+    }
+    // ...
+}
+```
+
+When parsing an if-expression, we assume we already have reached an `if`-token.
+
+We skip the `if`-token. Then we parse the condition expression `cond`. Then we check for a `{`-token and parse block. Then we check for an `else`-token. If not present, we return an if-expression with no `falsy`-option. Else we skip the `else`-token, check for and parse the `falsy`-block, and return the if-expression with the `falsy`-option.
+
+## 3.8 Loop expressions
+
+A loop expression is a `loop`-token followed by a block expression.
+
+```ts
+type ExprKind =
+    // ...
+    | { type: "loop", body: Expr }
+    // ...
+    ;
+```
+
+```ts
+class Parser {
+    // ...
+    public parseLoop(): Expr {
+        const pos = this.pos();
+        this.step();
+        if (!this.test("{")) {
+            this.report("expected '}'");
+            return { kind: { type: "error" }, pos };
+        }
+        const body = this.parseExpr();
+        return { kind: { type: "loop", body }, pos };
+    }
+    // ...
+}
+```
+
+We again assume, we've already hit a `loop`-token, which we step over. Then we check for and parse a block expression constituting the loop `body`. We then return the loop expression.
+
+## 3.9 Break statements
+
+A break statement consists of a `break`-token and an optional expression.
+
+The language will allow us to use loop as an expression. The break statement will then deliver the resulting value, eg.
+```rs
+let value = loop {
+    let value = get_value();
+    if acceptable(value) {
+        break value;
+    }
+};
+```
+
+```ts
+type StmtKind =
+    // ...
+    | { type: "break", expr?: Expr }
+    // ...
+    ;
+```
+
+```ts
+class Parser {
+    // ...
+    public parseBreak(): Stmt {
+        const pos = this.pos();
+        this.step();
+        if (!this.test(";")) {
+            return { kind: { type: "break" }, pos };
+        }
+        const expr = this.parseExpr();
+        return { kind: { type: "break", expr }, pos };
+    }
+    // ...
+}
+```
+
+We assume we've already hit a `break`-token and step over it. Then we check if we've hit a `;`-token. If so, there's no expression, so we return a break statement with no expression. If there's no `;`-token, we parse an expression and return a break statement with it.
+
+## 3.9 Return statements
+
+The return statement is for functions what break is for loops.
+
+```ts
+type StmtKind =
+    // ...
+    | { type: "return", expr?: Expr }
+    // ...
+    ;
+```
+
+```ts
+class Parser {
+    // ...
+    public parseReturn(): Stmt {
+        const pos = this.pos();
+        this.step();
+        if (!this.test(";")) {
+            return { kind: { type: "return" }, pos };
+        }
+        const expr = this.parseExpr();
+        return { kind: { type: "return", expr }, pos };
+    }
+    // ...
+}
+```
+
+## 3.10 Let statements
+
+A let statement declares a variable. A let statement consists of a `let`-token, an identifier, a `=`-token, and an expression. The expression is the initial value of the variable.
+
+```ts
+type StmtKind =
+    // ...
+    | { type: "let", ident: string, value: Expr }
+    // ...
+    ;
+```
+
+```ts
+class Parser {
+    // ...
+    public parseLet(): Stmt {
+        const pos = this.pos();
+        this.step();
+        if (!this.test("ident")) {
+            this.report("expected ident");
+            return { kind: { type: "error" }, pos };
+        }
+        const ident = this.current().identValue;
+        this.step();
+        if (!this.test("=")) {
+            this.report("expected '='");
+            return { kind: { type: "error" }, pos };
+        }
+        this.step();
+        const value = this.parseExpr();
+        return { kind: { type: "let", ident, value }, pos };
+    }
+    // ...
+}
+```
+
+We step over the first `let`-token. Then we check for an `ident`-token, save it's value and step over it. Then we check for and step over a `=`-token. We then parse an expressions. And lastly return a let statement with the `ident` and `valie`.
+
+## 3.11 Function definition statement
+
+A function definition statement or 'fn'-statement for short is a statement that defines a function with it's name, parameters and body.
+
+The function name is an identifier. The body is a block expression. The parameters is a list of identifiers seperated by `,`, enclosed in `(` and `)`.
+
+An fn statements consists of an `fn`-token, an it's name as an identifier token, a parameter list, and the body.
+
+```ts
+type StmtKind =
+    // ...
+    | { type: "fn", ident: string, params: Param[], body: Expr }
+    // ...
+    ;
+
+type Param = {
+    ident: string,
+    pos: Pos,
+};
+```
+
+```ts
+class Parser {
+    // ...
+    public parseFn(): Stmt {
+        const pos = this.pos();
+        this.step();
+        if (!this.test("ident")) {
+            this.report("expected ident");
+            return { kind: { type: "error" }, pos };
+        }
+        const ident = this.current().identValue;
+    }
+    // ...
+}
+```
+
+PS. it's called parameters in a function definition. We call with arguments, and define with parameters.
 
