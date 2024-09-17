@@ -411,8 +411,6 @@ func(
 )
 ```
 
-PS. it's called arguments in a function call. We call with arguments, and define with parameters.
-
 ## 3.5 Prefix expressions
 
 Contrasting postfix expressions, prefix expression are operations where the operator comes first, then the operands are listed. In some languages, operations such as negation (eg. `-value`) and not-operations (eg. `!value`) are prefix operations. In the language we're making, all binary and unary arithmetic operations are prefix. This includes both expressions with a single operand, such as not (eg. `not value`), but also expressions with 2 operands, such ass addition (eg. `+ a b`) and equation (eg. `== a b`).
@@ -526,7 +524,7 @@ class Parser {
         this.step();
         const cond = this.parseExpr();
         if (!this.test("{")) {
-            this.report("expected '}'");
+            this.report("expected block");
             return { kind: { type: "error" }, pos };
         }
         const truthy = this.parseBlock();
@@ -535,7 +533,7 @@ class Parser {
         }
         this.step();
         if (!this.test("{")) {
-            this.report("expected '}'");
+            this.report("expected block");
             return { kind: { type: "error" }, pos };
         }
         const falsy = this.parseBlock();
@@ -648,45 +646,7 @@ class Parser {
 }
 ```
 
-## 3.10 Let statements
-
-A let statement declares a variable. A let statement consists of a `let`-token, an identifier, a `=`-token, and an expression. The expression is the initial value of the variable.
-
-```ts
-type StmtKind =
-    // ...
-    | { type: "let", ident: string, value: Expr }
-    // ...
-    ;
-```
-
-```ts
-class Parser {
-    // ...
-    public parseLet(): Stmt {
-        const pos = this.pos();
-        this.step();
-        if (!this.test("ident")) {
-            this.report("expected ident");
-            return { kind: { type: "error" }, pos };
-        }
-        const ident = this.current().identValue;
-        this.step();
-        if (!this.test("=")) {
-            this.report("expected '='");
-            return { kind: { type: "error" }, pos };
-        }
-        this.step();
-        const value = this.parseExpr();
-        return { kind: { type: "let", ident, value }, pos };
-    }
-    // ...
-}
-```
-
-We step over the first `let`-token. Then we check for an `ident`-token, save it's value and step over it. Then we check for and step over a `=`-token. We then parse an expressions. And lastly return a let statement with the `ident` and `valie`.
-
-## 3.11 Function definition statement
+## 3.10 Function definition statement
 
 A function definition statement or 'fn'-statement for short is a statement that defines a function with it's name, parameters and body.
 
@@ -707,6 +667,8 @@ type Param = {
 };
 ```
 
+We start by defining a method `.parseFn()` to parse function definitions.
+
 ```ts
 class Parser {
     // ...
@@ -718,10 +680,191 @@ class Parser {
             return { kind: { type: "error" }, pos };
         }
         const ident = this.current().identValue;
+        this.step();
+        if (!this.test("(")) {
+            this.report("expected '('");
+            return { kind: { type: "error" }, pos };
+        }
+        const params = this.parseFnParams();
+        if (!params.ok)
+            return { kind: { type: "error" }, pos };
+        if (!this.test("{")) {
+            this.report("expected block");
+            return { kind: { type: "error" }, pos };
+        }
+        const body = this.parseBlock();
+        return { kind: { type: "fn", ident, params: params.value, body }, pos };
     }
     // ...
 }
 ```
 
-PS. it's called parameters in a function definition. We call with arguments, and define with parameters.
+We first step over the initial `fn`-token. Then we grap the value of an `ident`-token. Then we check for a `(` and call `.parseFnParams()` to parse the parameters, including the encapsulating `(` and `)`. Then we check for and parse a block. And then we return the statement.
+
+Then we define the `.parseFnParams()` method.
+
+```ts
+class Parser {
+    // ...
+    public parseFnParams(): Param[] {
+        this.step();
+        if (this.test(")")) {
+            this.step();
+            return [];
+        }
+        let params: Param[] = [];
+        const paramResult = this.parseParam();
+        if (!paramResult.ok)
+            return [];
+        params.push(paramResult.value);
+        while (this.test(",")) {
+            this.step();
+            if (this.test(")"))
+                break;
+            const paramResult = this.parseParam();
+            if (!paramResult.ok)
+                return [];
+            params.push(paramResult.value);
+        }
+        if (!this.test(")")) {
+            this.report("expected ')'");
+            return params;
+        }
+        this.step();
+        return params;
+    }
+    // ...
+}
+```
+
+We represent the parameter list as an array of params. We start by stepping over the `(`-token. If we immediately find a `)`-token, we step and return an empty array. Else we start collecting parameters. The parsing is similar to function call arguments, wherein we parse the first, then keep parsing until we no longer find a `,`-token or find a `)`-token right after a `,`. When done, we check we've reached a `)`, step and return the parameters. If `.parseParam()` fails, we return an empty array.
+
+We then need to define the `.parseParam()` method.
+
+```ts
+class Parser {
+    // ...
+    public parseParam(): { ok: true, value: Param } | { ok: false } {
+        const pos = this.pos();
+        if (this.test("ident")) {
+            const ident = self.current().value;
+            this.step();
+            return { ok: true, value: { ident, pos } };
+        }
+        this.report("expected param");
+        return { ok: false };
+    }
+    // ...
+}
+```
+
+We look for an identifier, and return a parameter with its value. If we don't find an identifier, we return a failed result.
+
+## 3.10 Let statements
+
+A let statement declares a variable. A let statement consists of a `let`-token, a parameter, a `=`-token, and an expression. The expression is the initial value of the variable.
+
+```ts
+type StmtKind =
+    // ...
+    | { type: "let", param: Param, value: Expr }
+    // ...
+    ;
+```
+
+```ts
+class Parser {
+    // ...
+    public parseLet(): Stmt {
+        const pos = this.pos();
+        this.step();
+        const paramResult = this.parseParam();
+        if (!paramResult.ok)
+            return { kind: { type: "error" }, pos };
+        const param = paramResult.value;
+        if (!this.test("=")) {
+            this.report("expected '='");
+            return { kind: { type: "error" }, pos };
+        }
+        this.step();
+        const value = this.parseExpr();
+        return { kind: { type: "let", param, value }, pos };
+    }
+    // ...
+}
+```
+
+We step over the first `let`-token. Then we parse a parameter using the `.parseParam()` method. If it fails, we return an error statement. Then we check for and step over a `=`-token. We then parse an expressions. And lastly return a let statement with the `ident` and `value`.
+
+## 3.14 Assignment and expression statements
+
+An assignment statement is an assignable expression (we'll just parse an expression), then a `=` token and another expression.
+
+Additionally, if an expression is used as a statement, it becomes an expression statement. This is important in this step.
+
+```ts
+type StmtKind =
+    // ...
+    | { type: "assign", subject: Expr, value: Expr }
+    | { type: "expr", expr: Expr }
+    // ...
+    ;
+```
+
+```ts
+class Parser {
+    // ...
+    public parseAssign(): Stmt {
+        const pos = this.pos();
+        const subject = this.parseExpr();
+        if (!this.test("=")) {
+            return { kind: { type: "expr", expr: subject }, pos };
+        }
+        this.step();
+        const value = this.parseExpr();
+        return { kind: { type: "assign", subject, value }, pos };
+    }
+    // ...
+}
+```
+
+We start by parsing an expression. If we do not reach a `=` afterwards, we return an expression statement. Else, we step, parse another expression and return an assignment statement.
+
+## 3.13 Block expressions
+
+Block expressions are statements and an optional expressions surrounded by `{` and `}`. Statements are terminated by `;`, if they don't end in `}`. If an expression is given as the last item without a terminating `;`, it is the blocks resulting value.
+
+Example:
+```rs
+let a = { 123 }; // a == 123
+
+let a = { let b = 123; b }; // a == 123
+
+let c = { if == a b { 123 } }; // c = 123
+
+let c = { if == a b { 123 } 321 }; // c = 321
+```
+
+```ts
+type ExprKind =
+    // ...
+    | { type: "block", stmts: Stmt[], expr?: Expr }
+    // ...
+    ;
+```
+
+```ts
+class Parser {
+    // ...
+    public parseBlock(): Expr {
+        const pos = this.pos();
+        this.step();
+        let stmts: Stmt[] = [];
+        while (!this.test("}")) {
+            // TODO
+        }
+    }
+    // ...
+}
+```
 
