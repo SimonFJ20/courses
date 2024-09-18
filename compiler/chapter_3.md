@@ -1160,6 +1160,10 @@ If none of the above, we parse an assignment statement, which will parse an assi
 
 ## 3.15 Exercises
 
-1. Implement the binary operators: `-`, `*`, `/`, `!=`, `<`, `>`, `<=`, `>=`, `or` and `and`.
-2. \*\* Implement infix notation, eg. `a + b` compared to `+ a b`.
+1. Implement boolean literals: `true` and `false` and null literal: `null`.
+2. Implement the binary operators: `-`, `*`, `/`, `!=`, `<`, `>`, `<=`, `>=`, `or` and `and`.
+3. \* Implement hex integer literals.
+4. \* Implement array literal syntax, eg. `[a, b c]`.
+5. \* Implement struct literal syntax, eg. `struct { field: expr, field: expr, ... }`.
+6. \*\* Implement infix notation, eg. `a + b`, as compared to `+ a b`.
 
