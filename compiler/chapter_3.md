@@ -17,6 +17,7 @@ This is how I would define an AST data type.
 type Stmt = {
     kind: StmtKind,
     pos: Pos,
+    id: number,
 };
 
 type StmtKind =
@@ -29,6 +30,7 @@ type StmtKind =
 type Expr = {
     kind: ExprKind,
     pos: Pos,
+    id: number,
 };
 
 type ExprKind =
@@ -43,7 +45,11 @@ Both `Stmt` (statement) and `Expr` (expression) are polymorphic types, meaning a
 
 For both `Stmt` and `Expr` there's an error-kind. This makes the parser simpler, as we won't need to manage parsing failures differently than successful parslings.
 
-## 3.2 Consumer of lexer
+Both AST node types contain an `id` field. This field will be a unique value for each instance of a node.
+
+## 3.2 The parser class
+
+### 3.2.1 Consumer of lexer
 
 To start, we'll implement a `Parser` class, which for now is simply a consumer of a token iterater, meaning the lexer. In simple terms, whereas the lexer is a transformation from text to tokens, the parser is a transformation from token to an AST, except that the parser is not an iterator.
 
@@ -105,13 +111,39 @@ class Parser {
 
 When testing, we first check that we have not reach the end. Either we have to do that here, or the caller will have to write something like `!this.done() && this.test(...)`, and it's easy to do it here.
 
-We'll also want a method for reporting errors.
+### 3.2.2 Reporting errors
+
+We'll want a method for reporting errors.
 
 ```ts
 class Parser {
     // ...
     private report(msg: string, pos = this.pos()) {
         console.log(`Parser: ${msg} at ${pos.line}:${pos.col}`);
+    }
+    // ...
+}
+```
+
+### 3.2.3 Constructing AST nodes
+
+We also want methods for constructing statements and expressions with auto incrementing ids.
+
+```ts
+class Parser {
+    // ...
+    private nextNodeId = 0;
+    // ...
+    private stmt(kind: StmtKind, pos: Pos): Stmt {
+        const id = this.nextNodeId;
+        this.nextNodeId += 1;
+        return { kind, pos, id };
+    }
+
+    private expr(kind: ExprKind, pos: Pos): Expr {
+        const id = this.nextNodeId;
+        this.nextNodeId += 1;
+        return { kind, pos, id };
     }
     // ...
 }
@@ -131,7 +163,7 @@ class Parser {
         // ...
         this.report("expected expr", pos);
         this.step();
-        return { kind: { type: "error" }, pos };
+        return this.expr({ type: "error" }, pos);
     }
     // ...
 }
@@ -159,17 +191,17 @@ class Parser {
         if (this.test("ident")) {
             const value = this.current().identValue;
             this.step();
-            return { kind: { type: "ident", value }, pos };
+            return this.expr({ type: "ident", value }, pos);
         }
         if (this.test("int")) {
             const value = this.current().intValue;
             this.step();
-            return { kind: { type: "int", value }, pos };
+            return this.expr({ type: "int", value }, pos);
         }
         if (this.test("string")) {
             const value = this.current().stringValue;
             this.step();
-            return { kind: { type: "string", value }, pos };
+            return this.expr({ type: "string", value }, pos);
         }
         // ...
     }
@@ -201,10 +233,10 @@ class Parser {
             const expr = this.parseExpr();
             if (!this.test(")")) {
                 this.report("expected ')'");
-                return { kind: { type: "error" }, pos };
+                return this.expr({ type: "error" }, pos);
             }
             this.step();
-            return { kind: { type: "group", expr }, pos };
+            return this.expr({ type: "group", expr }, pos);
         }
         // ...
     }
@@ -293,11 +325,11 @@ class Parser {
                 this.step();
                 if (!this.test("ident")) {
                     this.report("expected ident");
-                    return { kind: { type: "error" }, pos };
+                    return this.expr({ type: "error" }, pos);
                 }
                 const value = this.current().identValue;
                 this.step();
-                subject = { kind: { type: "field", subject, value }, pos };
+                subject = this.expr({ type: "field", subject, value }, pos);
                 continue;
             }
             // ...
@@ -335,10 +367,10 @@ class Parser {
                 const value = this.parseExpr();
                 if (!this.test("]") {
                     this.report("expected ']'");
-                    return { kind: { type: "error" }, pos };
+                    return this.expr({ type: "error" }, pos);
                 }
                 this.step();
-                subject = { kind: { type: "index", subject, value }, pos };
+                subject = this.expr({ type: "index", subject, value }, pos);
                 continue;
             }
             // ...
@@ -385,10 +417,10 @@ class Parser {
                 const value = this.parseExpr();
                 if (!this.test(")") {
                     this.report("expected ')'");
-                    return { kind: { type: "error" }, pos };
+                    return this.expr({ type: "error" }, pos);
                 }
                 this.step();
-                subject = { kind: { type: "call", subject, args }, pos };
+                subject = this.expr({ type: "call", subject, args }, pos);
                 continue;
             }
             // ...
@@ -457,7 +489,7 @@ class Parser {
         if (this.test("not")) {
             this.step();
             const subject = this.parsePrefix();
-            return { kind: { type: "unary", unaryType: "not", subject }, pos };
+            return this.expr({ type: "unary", unaryType: "not", subject }, pos);
         }
         // ...
     }
@@ -478,7 +510,7 @@ class Parser {
             this.step();
             const left = this.parsePrefix();
             const right = this.parsePrefix();
-            return { kind: { type: "binary", binaryType: "+", left, right }, pos };
+            return this.expr({ type: "binary", binaryType: "+", left, right }, pos);
         }
         // ...
     }
@@ -525,19 +557,19 @@ class Parser {
         const cond = this.parseExpr();
         if (!this.test("{")) {
             this.report("expected block");
-            return { kind: { type: "error" }, pos };
+            return this.expr({ type: "error" }, pos);
         }
         const truthy = this.parseBlock();
         if (!this.test("else")) {
-            return { kind: { type: "if", cond, truthy }, pos };
+            return this.expr({ type: "if", cond, truthy }, pos);
         }
         this.step();
         if (!this.test("{")) {
             this.report("expected block");
-            return { kind: { type: "error" }, pos };
+            return this.expr({ type: "error" }, pos);
         }
         const falsy = this.parseBlock();
-        return { kind: { type: "if", cond, truthy, falsy }, pos };
+        return this.expr({ type: "if", cond, truthy, falsy }, pos);
     }
     // ...
 }
@@ -567,10 +599,10 @@ class Parser {
         this.step();
         if (!this.test("{")) {
             this.report("expected '}'");
-            return { kind: { type: "error" }, pos };
+            return this.expr({ type: "error" }, pos);
         }
         const body = this.parseExpr();
-        return { kind: { type: "loop", body }, pos };
+        return this.expr({ type: "loop", body }, pos);
     }
     // ...
 }
@@ -607,10 +639,10 @@ class Parser {
         const pos = this.pos();
         this.step();
         if (!this.test(";")) {
-            return { kind: { type: "break" }, pos };
+            return this.stmt({ type: "break" }, pos);
         }
         const expr = this.parseExpr();
-        return { kind: { type: "break", expr }, pos };
+        return this.stmt({ type: "break", expr }, pos);
     }
     // ...
 }
@@ -637,10 +669,10 @@ class Parser {
         const pos = this.pos();
         this.step();
         if (!this.test(";")) {
-            return { kind: { type: "return" }, pos };
+            return this.stmt({ type: "return" }, pos);
         }
         const expr = this.parseExpr();
-        return { kind: { type: "return", expr }, pos };
+        return this.stmt({ type: "return", expr }, pos);
     }
     // ...
 }
@@ -677,23 +709,23 @@ class Parser {
         this.step();
         if (!this.test("ident")) {
             this.report("expected ident");
-            return { kind: { type: "error" }, pos };
+            return this.stmt({ type: "error" }, pos);
         }
         const ident = this.current().identValue;
         this.step();
         if (!this.test("(")) {
             this.report("expected '('");
-            return { kind: { type: "error" }, pos };
+            return this.stmt({ type: "error" }, pos);
         }
         const params = this.parseFnParams();
         if (!params.ok)
-            return { kind: { type: "error" }, pos };
+            return this.stmt({ type: "error" }, pos);
         if (!this.test("{")) {
             this.report("expected block");
-            return { kind: { type: "error" }, pos };
+            return this.stmt({ type: "error" }, pos);
         }
         const body = this.parseBlock();
-        return { kind: { type: "fn", ident, params: params.value, body }, pos };
+        return this.stmt({ type: "fn", ident, params: params.value, body }, pos);
     }
     // ...
 }
@@ -780,15 +812,15 @@ class Parser {
         this.step();
         const paramResult = this.parseParam();
         if (!paramResult.ok)
-            return { kind: { type: "error" }, pos };
+            return this.stmt({ type: "error" }, pos);
         const param = paramResult.value;
         if (!this.test("=")) {
             this.report("expected '='");
-            return { kind: { type: "error" }, pos };
+            return this.stmt({ type: "error" }, pos);
         }
         this.step();
         const value = this.parseExpr();
-        return { kind: { type: "let", param, value }, pos };
+        return this.stmt({ type: "let", param, value }, pos);
     }
     // ...
 }
@@ -818,11 +850,11 @@ class Parser {
         const pos = this.pos();
         const subject = this.parseExpr();
         if (!this.test("=")) {
-            return { kind: { type: "expr", expr: subject }, pos };
+            return this.stmt({ type: "expr", expr: subject }, pos);
         }
         this.step();
         const value = this.parseExpr();
-        return { kind: { type: "assign", subject, value }, pos };
+        return this.stmt({ type: "assign", subject, value }, pos);
     }
     // ...
 }
@@ -860,11 +892,274 @@ class Parser {
         const pos = this.pos();
         this.step();
         let stmts: Stmt[] = [];
-        while (!this.test("}")) {
-            // TODO
+        while (!this.done()) {
+            // ...
         }
+        this.report("expected '}'");
+        return this.expr({ type: "error" }, pos);
     }
     // ...
 }
 ```
+
+We step over the `{` and begin looping. We expect to return inside the loop, so we report an error, if the loop runs through.
+
+```ts
+class Parser {
+    // ...
+    public parseBlock(): Expr {
+        // ...
+        while (!this.done()) {
+            if (this.test("}")) {
+                return this.expr({ type: "block", stmts }, pos);
+            // ...
+            }
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+If we reach a `}`, return a block with the statements.
+
+```ts
+class Parser {
+    // ...
+    public parseBlock(): Expr {
+        // ...
+        while (!this.done()) {
+            if (this.test("}")) {
+            // ...
+            } else if (this.test("fn")) {
+                stmts.push(this.parseFn());
+            // ...
+            }
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+If we reach a `fn`-token, we parse a fn statement and continue parsing statements. 
+
+```ts
+class Parser {
+    // ...
+    public parseBlock(): Expr {
+        // ...
+        while (!this.done()) {
+            if (this.test("}")) {
+            // ...
+            } else if (this.test("let") || this.test("return") || this.test("break")) {
+                stmts.push(this.parseSingleLineBlockStmt());
+                this.eatSemicolon();
+            // ...
+            }
+        }
+        // ...
+    }
+    // ...
+    private parseSingleLineBlockStmt(): Stmt {
+        if (this.test("let"))
+            return this.parseLet();
+        if (this.test("return"))
+            return this.parseReturn();
+        if (this.test("break")) 
+            return this.parseBreak();
+        this.report("expected stmt");
+        return this.stmt({ type: "error" }, pos);
+    }
+    // ...
+    private eatSemicolon() {
+        if (!this.test(";")) {
+            this.report("expected ';'");
+            return;
+        }
+        this.step();
+    }
+    // ...
+}
+```
+
+If we reach a token designating the start of a single line statement, such as `let` in a let statement, `return`, `break`, parse a single line block statement, then check for a `;`-token. Then continue parsing statements.
+
+```ts
+class Parser {
+    // ...
+    public parseBlock(): Expr {
+        // ...
+        while (!this.done()) {
+            if (this.test("}")) {
+            // ...
+            } else if (this.test("{") || this.test("if") || this.test("loop")) {
+                let expr = this.parseMultiLineBlockExpr();
+                if (this.test("}")) {
+                    this.step();
+                    return this.expr({ type: "block", stmts, expr }, pos);
+                }
+                stmts.push(this.stmt({ type: "expr", expr }, expr.pos));
+            // ...
+            }
+        }
+        // ...
+    }
+    // ...
+    private parseMultiLineBlockExpr(): Expr {
+        if (this.test("{")) 
+            return this.parseBlock();
+        if (this.test("if"))
+            return this.parseIf();
+        if (this.test("loop"))
+            return this.parseLoop();
+        this.report("expected expr");
+        return this.expr({ type: "error" }, pos);
+    }
+    // ...
+}
+```
+
+If we reach a token designating an expression or statement ending with a `}`, such as `if`, `loop` and `{` as in a block expression, parse a multi line expression. If we've hit the end of the block, then return a block expression with the parsed multi line expression as the resuling value. Otherwise, push the expression as an expression statement.
+
+```ts
+class Parser {
+    // ...
+    public parseBlock(): Expr {
+        // ...
+        while (!this.done()) {
+            if (this.test("}")) {
+            // ...
+            } else {
+                const expr = this.parseExpr();
+                if (this.test("=")) {
+                    this.step();
+                    const value = this.parseExpr();
+                    this.eatSemicolon();
+                    stmts.push(this.stmt({ type: "assign", subject: expr, value }, pos));
+                } else if (this.test(";")) {
+                    stmts.push(this.stmt({ type: "expr", expr }, expr.pos));
+                } else if (this.test("}")) {
+                    return this.expr({ type: "block", stmts, expr }, pos);
+                } else {
+                    this.report("expected ';' or '}'");
+                    return this.expr({ type: "error" }, pos);
+                }
+            }
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+If we don't recognize the token we've reached, we assume it's an expression. If we reach `=` after parsing the initial expression, we try to parse an assignment statement. Since we cannot use the `.parseAssign()` method here, we do the same here as in that method, then check that we hit a `;`, and then push the assignment statement instead of returning. If instead we hit a `;`, we push the expression as an expression statements. Else, if we hit a `}`, we've reached the end of the block, and we return a block expression with the parsed expression as the resulting value. Otherwise, we report an error.
+
+## 3.14 Statements
+
+Lastly, we'll define a method `.parseStmts()` for parsing top level statements.
+
+```ts
+class Parser {
+    // ...
+    public parseStmts(): Stmt[] {
+        let stmts: Stmt[] = [];
+        while (!this.done()) {
+            // ...
+        }
+        return stmts;
+    }
+    // ...
+}
+```
+
+We want to parse every statement in the file, so we loop until we've reach the end.
+
+```ts
+class Parser {
+    // ...
+    public parseStmts(): Stmt[] {
+        let stmts: Stmt[] = [];
+        while (!this.done()) {
+            if (this.test("fn")) {
+                stmts.push(this.parseFn());
+            // ...
+            }
+        }
+        return stmts;
+    }
+    // ...
+}
+```
+
+We first test, if we've reached a multi line statement ending in a `}`, such as a fn statement.
+
+```ts
+class Parser {
+    // ...
+    public parseStmts(): Stmt[] {
+        let stmts: Stmt[] = [];
+        while (!this.done()) {
+            if (this.test("fn")) {
+            // ...
+            } else if (this.test("let") || this.test("return") || this.test("break")) {
+                stmts.push(this.parseSingleLineBlockStmt());
+                this.eatSemicolon();
+            // ...
+            }
+        }
+        return stmts;
+    }
+    // ...
+}
+```
+
+Then we test, if we've reached a single line statement, meaning it should end with a `;`, ishc as let, return and break.
+
+```ts
+class Parser {
+    // ...
+    public parseStmts(): Stmt[] {
+        let stmts: Stmt[] = [];
+        while (!this.done()) {
+            if (this.test("fn")) {
+            // ...
+            } else if (this.test("{") || this.test("if") || this.test("loop")) {
+                let expr = this.parseMultiLineBlockExpr();
+                stmts.push(this.stmt({ type: "expr", expr }, expr.pos));
+            // ...
+            }
+        }
+        return stmts;
+    }
+    // ...
+}
+```
+
+Then we test, if we've reached a multi line expression ending in `}`, such as if, loop and a block expression.
+
+```ts
+class Parser {
+    // ...
+    public parseStmts(): Stmt[] {
+        let stmts: Stmt[] = [];
+        while (!this.done()) {
+            if (this.test("fn")) {
+            // ...
+            } else  {
+                stmts.push(this.parseAssign());
+            }
+        }
+        return stmts;
+    }
+    // ...
+}
+```
+
+If none of the above, we parse an assignment statement, which will parse an assignment statement or an expression statement.
+
+## 3.15 Exercises
+
+1. Implement the binary operators: `-`, `*`, `/`, `!=`, `<`, `>`, `<=`, `>=`, `or` and `and`.
+2. \*\* Implement infix notation, eg. `a + b` compared to `+ a b`.
 
