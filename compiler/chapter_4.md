@@ -52,18 +52,52 @@ type Value =
     // ...
 ```
 
-Lastly we'll define a type for built in functions.
+Lastly we'll define a type for builtin functions.
 
 ```ts
 type Value =
     // ...
-    | { type: "builtin_fn", action: BuiltInAction }
+    | { type: "builtin_fn", name: string }
     // ...
-
-type BuiltinAction = (...args: Value[]) => Value;
 ```
 
-A builtin function will have an action function, which takes a varying number of parameters and returns a value.
+A builtin function will have a name, which the evaluator will understand and treat accordingly.
+
+### 4.2.1 Stringification
+
+We'll need a way to represent values as text in strings.
+
+```ts
+function valueToString(value: Value): string {
+    if (value.type === "error") {
+        return "<error>";
+    } else if (value.type === "null") {
+        return "null";
+    } else if (value.type === "int") {
+        return value.value.toString();
+    } else if (value.type === "string") {
+        return `"${value.value}"`;
+    } else if (value.type === "bool") {
+        return value.value ? "true" : "false";
+    } else if (value.type === "array") {
+        const valueStrings = result.values
+            .map(value => value.toString());
+        return `[${valueStrings.join(", ")}]`;
+    } else if (value.type === "struct") {
+        const fieldStrings = Object.entries(result.fields)
+            .map(([key, value]) => `${key}: ${valueToString(value)}`);
+        return `struct { ${fieldStrings.join(", ")} }`;
+    } else if (value.type === "fn") {
+        return `<fn: ${value.fnDefId}>`;
+    } else if (value.type === "builtin_fn") {
+        return `<builtin_fn: ${value.name}>`;
+    } else {
+        throw new Error("unexhaustive");
+    }
+}
+```
+
+The `valueToString` function takes a value (variable of type `Value`) and checks its type. For each type of value, it returns a string representing that value. For error and null we return a static string of `"<error>"` and `"null"` respectably. For the others, we return a string also representing the *value's value*, eg. for int, we return the int value as a string. For array and struct, we call `valueToString` recursively on the contained values.
 
 ## 4.2 Symbols
 
@@ -162,16 +196,7 @@ class Evaluator {
     private root = new Syms();
 
     public withBuiltins(): Evaluator {
-        this.root.define("println", (fmt, ...args) => {
-            if (!fmt)
-                throw new Error("incorrect arguments");
-            let msg = fmt;
-            for (const arg of args) {
-                if (!msg.includes("{}"))
-                    throw new Error("incorrect arguments");
-                msg.replace("{}", )
-            }
-        });
+        this.root.define("println", { type: "builtin_fn", name: "println" });
     }
 
     public evalStmts(stmts: Stmt[]): Flow {
@@ -183,8 +208,31 @@ class Evaluator {
     }
 
     public evalExpr(expr: Expr): Flow {
-
+        // ...
     }
+
+    private executeBuiltin(name: string, args: Value[]): Flow {
+        if (name === "println") {
+            if (args.length < 1)
+                throw new Error("incorrect arguments");
+            let msg = args[0];
+            for (const arg of args.slice(1)) {
+                if (!msg.includes("{}"))
+                    throw new Error("incorrect arguments");
+                msg.replace("{}", valueToString(arg));
+            }
+            console.log(msg);
+            return this.value(this.nullValue);
+        } else {
+            throw new Error("unknown builtin");
+        }
+    }
+
+    private value(value: Value): Flow { return { type: "value", value }; }
+
+
+    private readonly errorValue: Value = { type: "null" };
+    private readonly nullValue: Value = { type: "error" };
 }
 ```
 
