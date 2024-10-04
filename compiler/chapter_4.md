@@ -189,15 +189,111 @@ type Flow = {
 
 The 3 implemented options for control flow is breaking in a loop, returning in a function and the non-breaking flow. All 3 options have an associated value.
 
+### 4.3.1 Flow and value constructors
+
+For ease of use, we'll add some functions to create the commonly used flow types and values.
+
+```ts
+function flowWalue(value: Value): Flow {
+    return { type: "value", value };
+}
+
+function nullValue(): Value {
+    return { type: "null" };
+}
+```
+
 ## 4.4 The evaluator class
+
+To run/evaluate the code, we'll make an evaluator class.
+
+```ts
+class Evaluator {
+    // ...
+}
+```
+
+### 4.4.1 Root symbol table
+
+We'll want a *root* symbol table, which stores all the predefined symbols. We also want a function for defining predefined symbols, ie. builtins.
 
 ```ts
 class Evaluator {
     private root = new Syms();
+    // ...
+    public defineBuiltins() { /*...*/ }
+    // ...
+}
+```
 
-    public withBuiltins(): Evaluator {
-        this.root.define("println", { type: "builtin_fn", name: "println" });
+The `defineBuiltins` function will be defined later.
+
+### 4.5 Expressions
+
+Let's make a function `evalExpr` for evaluating expressions.
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr): Flow {
+        if (expr.type === "error") {
+            throw new Error("error in AST");
+        // ...
+        } else {
+            throw new Error(`unknown expr type "${expr.type}"`);
+        }
     }
+    // ...
+}
+```
+
+The `evalExpr` function will take an expression and a symbol table, match the type of the expression and return a flow. If the expression is an error, meaning an error in the AST, the evaluator throws an error. In case the expression type is unknown, an error is thrown with the error type in the message.
+
+#### 4.5.1 Identifiers
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        if (expr.type === "error") {
+        // ...
+        } else if (expr.type === "ident") {
+            const result = syms.get(expr.value);
+            if (!result.ok)
+                throw new Error(`undefined symbol "${expr.value}"`);
+            return this.value(result.value);
+        } else {
+        // ...
+        }
+    }
+    // ...
+}
+```
+
+#### 4.5.2 Literal expressions
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        if (expr.type === "error") {
+        // ...
+        } else if (expr.type === "null") {
+            return this.value(this.nullValue);
+        } else if (expr.type === "int") {
+        } else if (expr.type === "string") {
+        } else if (expr.type === "bool") {
+        } else {
+        // ...
+        }
+    }
+    // ...
+}
+```
+
+```ts
+class Evaluator {
+    private root = new Syms();
 
     public evalStmts(stmts: Stmt[]): Flow {
         // ...
@@ -212,7 +308,20 @@ class Evaluator {
     }
 
     private executeBuiltin(name: string, args: Value[]): Flow {
-        if (name === "println") {
+        if (name === "array") {
+            return this.value({ type: "array", values: [] });
+        } else if (name === "struct") {
+            return this.value({ type: "struct", fields: {} });
+        } else if (name === "push") {
+            if (args.length !== 2)
+                throw new Error("incorrect arguments");
+            const array = args[0];
+            const value = args[1];
+            if (array.type !== "array")
+                throw new Error("incorrect arguments");
+            array.values.push(value);
+            return this.value(this.nullValue);
+        } else if (name === "println") {
             if (args.length < 1)
                 throw new Error("incorrect arguments");
             let msg = args[0];
@@ -224,8 +333,15 @@ class Evaluator {
             console.log(msg);
             return this.value(this.nullValue);
         } else {
-            throw new Error("unknown builtin");
+            throw new Error(`unknown builtin "${name}"`);
         }
+    }
+
+    public defineBuiltins() {
+        this.root.define("array", { type: "builtin_fn", name: "array" });
+        this.root.define("struct", { type: "builtin_fn", name: "struct" });
+        this.root.define("push", { type: "builtin_fn", name: "struct" });
+        this.root.define("println", { type: "builtin_fn", name: "println" });
     }
 
     private value(value: Value): Flow { return { type: "value", value }; }
