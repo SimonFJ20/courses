@@ -302,7 +302,7 @@ We start by parsing an operand. Then we enter a loop, which runs until we no lon
 
 Notice we don't define `pos` at the start, but after we've parsed the subject. That's because we want `pos` to the reflect the start of the postfix operator, not the start of the subject.
 
-### 3.4.1 Field expression
+### 3.4.1 Field expressions
 
 A field expression is for accessing fields on an object, and consists of a `.`-token and an identifier, eg. `.field`.
 
@@ -342,7 +342,7 @@ class Parser {
 
 If we find a `.`-token, we step over it, and make sure that we've hit an identifier. We save the identifier value and step over the identifier. Then we replace `subject` with a new field expression containing the previous `subject` value. Then we continue to look for the next postfix operator.
 
-### 3.4.2 Index expression
+### 3.4.2 Index expressions
 
 An index operation consists of the subject and an index. The index is an expression, and it is contained in `[`- and `]`-tokens, eg. `subject[value]`.
 
@@ -383,7 +383,7 @@ class Parser {
 
 If we find a `[`-token, we parse the index part exactly the same way, we parse a group expression.
 
-### 3.4.3 Call expression
+### 3.4.3 Call expressions
 
 A call expression is like an index expression, except that it uses `(` and `)` instead of `[` and `]` and that there can be 0 or more expressions (arguments or args) inside the `(` and `)`. The arguments are seperated by `,`.
 

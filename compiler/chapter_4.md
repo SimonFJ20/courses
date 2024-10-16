@@ -71,29 +71,36 @@ We'll need a way to represent values as text in strings.
 function valueToString(value: Value): string {
     if (value.type === "error") {
         return "<error>";
-    } else if (value.type === "null") {
+    }
+    if (value.type === "null") {
         return "null";
-    } else if (value.type === "int") {
+    }
+    if (value.type === "int") {
         return value.value.toString();
-    } else if (value.type === "string") {
+    }
+    if (value.type === "string") {
         return `"${value.value}"`;
-    } else if (value.type === "bool") {
+    }
+    if (value.type === "bool") {
         return value.value ? "true" : "false";
-    } else if (value.type === "array") {
+    }
+    if (value.type === "array") {
         const valueStrings = result.values
             .map(value => value.toString());
         return `[${valueStrings.join(", ")}]`;
-    } else if (value.type === "struct") {
+    }
+    if (value.type === "struct") {
         const fieldStrings = Object.entries(result.fields)
             .map(([key, value]) => `${key}: ${valueToString(value)}`);
         return `struct { ${fieldStrings.join(", ")} }`;
-    } else if (value.type === "fn") {
-        return `<fn: ${value.fnDefId}>`;
-    } else if (value.type === "builtin_fn") {
-        return `<builtin_fn: ${value.name}>`;
-    } else {
-        throw new Error("unexhaustive");
     }
+    if (value.type === "fn") {
+        return `<fn: ${value.fnDefId}>`;
+    }
+    if (value.type === "builtin_fn") {
+        return `<builtin_fn: ${value.name}>`;
+    }
+    throw new Error("unexhaustive");
 }
 ```
 
@@ -197,10 +204,6 @@ For ease of use, we'll add some functions to create the commonly used flow types
 function flowWalue(value: Value): Flow {
     return { type: "value", value };
 }
-
-function nullValue(): Value {
-    return { type: "null" };
-}
 ```
 
 ## 4.4 The evaluator class
@@ -228,7 +231,7 @@ class Evaluator {
 
 The `defineBuiltins` function will be defined later.
 
-### 4.5 Expressions
+## 4.5 Expressions
 
 Let's make a function `evalExpr` for evaluating expressions.
 
@@ -238,10 +241,9 @@ class Evaluator {
     public evalExpr(expr: Expr): Flow {
         if (expr.type === "error") {
             throw new Error("error in AST");
-        // ...
-        } else {
-            throw new Error(`unknown expr type "${expr.type}"`);
         }
+        // ...
+        throw new Error(`unknown expr type "${expr.type}"`);
     }
     // ...
 }
@@ -249,43 +251,183 @@ class Evaluator {
 
 The `evalExpr` function will take an expression and a symbol table, match the type of the expression and return a flow. If the expression is an error, meaning an error in the AST, the evaluator throws an error. In case the expression type is unknown, an error is thrown with the error type in the message.
 
-#### 4.5.1 Identifiers
+### 4.5.1 Identifiers
 
 ```ts
 class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
-        if (expr.type === "error") {
         // ...
-        } else if (expr.type === "ident") {
+        if (expr.type === "ident") {
             const result = syms.get(expr.value);
             if (!result.ok)
                 throw new Error(`undefined symbol "${expr.value}"`);
-            return this.value(result.value);
-        } else {
-        // ...
+            return flowValue(result.value);
         }
+        // ...
     }
     // ...
 }
 ```
 
-#### 4.5.2 Literal expressions
+### 4.5.2 Literal expressions
 
 ```ts
 class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
-        if (expr.type === "error") {
         // ...
-        } else if (expr.type === "null") {
-            return this.value(this.nullValue);
-        } else if (expr.type === "int") {
-        } else if (expr.type === "string") {
-        } else if (expr.type === "bool") {
-        } else {
-        // ...
+        if (expr.type === "null") {
+            return flowValue({ type: "null" });
         }
+        if (expr.type === "int") {
+            return flowValue({ type: "int", value: expr.value });
+        }
+        if (expr.type === "string") {
+            return flowValue({ type: "string", value: expr.value });
+        }
+        if (expr.type === "bool") {
+            return flowValue({ type: "int", value: expr.value });
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+To evaluate a literal, we basically translate the value in AST form into a value, and then return the value.
+
+### 4.5.3 Group expressions
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        // ...
+        if (expr.type === "group") {
+            return this.evalExpr(expr.expr);
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+To evaluate a group expression, we simply evaluate the contained expression.
+
+### 4.5.4 Field expressions
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        // ...
+        if (expr.type === "field") {
+            const subjectFlow = this.evalExpr(expr.subject);
+            if (subjectFlow.type !== "value")
+                return subjectFlow;
+            const subject = subjectFlow.value;
+            if (subject.type !== "struct")
+                throw new Error(`cannot use field operator on ${subject.type} value`);
+            if (!(expr.value in subject.fields))
+                throw new Error(`field ${expr.value} does not exist on struct`);
+            return subject.fields[expr.value];
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+We first evaluate the subject expression, break in case the control flow isn't a value and store the value. After checking that the value is a struct and that the field exists on the struct, the field's value is returned.
+
+### 4.5.5 Index expressions
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        // ...
+        if (expr.type === "index") {
+            const valueFlow = this.evalExpr(expr.value);
+            if (valueFlow.type !== "value")
+                return valueFlow;
+            const value = valueFlow.value;
+            const subjectFlow = this.evalExpr(expr.subject);
+            if (subjectFlow.type !== "value")
+                return subjectFlow;
+            const subject = subjectFlow.value;
+            if (subject.type === "struct") {
+                if (value.type !== "string")
+                    throw new Error(`cannot index into struct with ${value.type} value`);
+                if (!(value.value in subject.fields))
+                    return flowValue({ type: "null" });
+                return flowValue(subject.fields[value.value]);
+            }
+            if (subject.type === "array") {
+                if (value.type !== "int")
+                    throw new Error(`cannot index into array with ${value.type} value`);
+                if (value.value >= subject.values.length)
+                    throw new Error("index out of range");
+                if (value.value < 0) {
+                    const negativeIndex = subject.values.length + value.value;
+                    if (negativeIndex < 0 || negativeIndex >= subject.values.length)
+                        throw new Error("index out of range");
+                    return flowValue(subject.values[negativeIndex]);
+                }
+                return flowValue(subject.values[value.value]);
+            }
+            if (subject.type === "string") {
+                if (value.type !== "int")
+                    throw new Error(`cannot index into string with ${value.type} value`);
+                if (value.value >= subject.values.length)
+                    throw new Error("index out of range");
+                if (value.value < 0) {
+                    const negativeIndex = subject.values.length + value.value;
+                    if (negativeIndex < 0 || negativeIndex >= subject.values.length)
+                        throw new Error("index out of range");
+                    return flowValue(subject.value.charCodeAt(negativeIndex));
+                }
+                return flowValue(subject.value.charCodeAt(value.value));
+            }
+            throw new Error(`cannot use index operator on ${subject.type} value`);
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+The index operator can be evaluated on a subject of either struct, array or string type. If evaluated on the struct type, we expect a string containing the field name. If the field does not exist, we return a null value. This is in contrast to the field operator, which throws an error, if no field is found. If the subject is instead an array, we expect a value of type int. We check if either the int value index or negative index is in range of the array values. If so, return the value at the index or the negative index. If the subject is a string, evaluation will behave similarly to an array, evaluating to an int value representing the value of the text character at the index or negative index.
+
+The negative index is when a negative int value is passed as index, where the index will start at the end of the array. Given an array `vs` containing the values `["a", "b", "c"]` in listed order, the indices `0`, `1` and `2` will evalute to the values `"a"`, `"b"` and `"c"`, whereas the indices `-1`, `-2`, `-3` will evaluate to the values `"c"`, `"b"` and `"a"`. A negative index implicitly starts at the length of the array and subtracts the absolute index value.
+
+### 4.5.6 Call expressions
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        // ...
+        if (expr.type === "call") {
+            const subjectFlow = this.evalExpr(expr.subject);
+            if (subjectFlow.type !== "value")
+                return subjectFlow;
+            const subject = subjectFlow.value;
+            const args: Value[] = [];
+            for (const arg of expr.args) {
+                const valueFlow = this.evalExpr(arg);
+                if (valueFlow.type !== "value")
+                    return valueFlow;
+                args.push(valueFlow);
+            }
+            if (subject.type !== "fn")
+                throw new Error(`cannot use field operator on ${subject.type} value`);
+            if (!(expr.value in subject.fields))
+                throw new Error(`field ${expr.value} does not exist on struct`);
+            return subject.fields[expr.value];
+        }
+        // ...
     }
     // ...
 }
@@ -309,9 +451,9 @@ class Evaluator {
 
     private executeBuiltin(name: string, args: Value[]): Flow {
         if (name === "array") {
-            return this.value({ type: "array", values: [] });
+            return flowValue({ type: "array", values: [] });
         } else if (name === "struct") {
-            return this.value({ type: "struct", fields: {} });
+            return flowValue({ type: "struct", fields: {} });
         } else if (name === "push") {
             if (args.length !== 2)
                 throw new Error("incorrect arguments");
@@ -320,7 +462,7 @@ class Evaluator {
             if (array.type !== "array")
                 throw new Error("incorrect arguments");
             array.values.push(value);
-            return this.value(this.nullValue);
+            return flowValue({ type: "null" });
         } else if (name === "println") {
             if (args.length < 1)
                 throw new Error("incorrect arguments");
@@ -331,7 +473,7 @@ class Evaluator {
                 msg.replace("{}", valueToString(arg));
             }
             console.log(msg);
-            return this.value(this.nullValue);
+            return flowValue({ type: "null" });
         } else {
             throw new Error(`unknown builtin "${name}"`);
         }
@@ -343,12 +485,6 @@ class Evaluator {
         this.root.define("push", { type: "builtin_fn", name: "struct" });
         this.root.define("println", { type: "builtin_fn", name: "println" });
     }
-
-    private value(value: Value): Flow { return { type: "value", value }; }
-
-
-    private readonly errorValue: Value = { type: "null" };
-    private readonly nullValue: Value = { type: "error" };
 }
 ```
 
