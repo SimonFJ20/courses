@@ -1158,7 +1158,7 @@ class Parser {
 
 If none of the above, we parse an assignment statement, which will parse an assignment statement or an expression statement.
 
-## 3.15 Exercises
+## 3 Exercises
 
 1. Implement boolean literals: `true` and `false` and null literal: `null`.
 2. Implement the binary operators: `-`, `*`, `/`, `!=`, `<`, `>`, `<=`, `>=`, `or` and `and`.

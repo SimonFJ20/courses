@@ -178,10 +178,31 @@ class Syms {
             return this.parent.get(ident);
         return { ok: false };
     }
+    // ...
 }
 ```
 
 If the symbol is defined locally, return the value. Else if a the parent node is defined, defer to the parent. Otherwise, return a not-found result.
+
+Then we'll need a function for redefining existing symbols.
+
+```ts
+class Syms {
+    // ...
+    public redefine(ident: string, value: Value): { ok: true } | { ok: false } {
+        if (ident in this.syms) {
+            this.syms[ident] = value;
+            return { ok: true }
+        }
+        if (this.parent)
+            return this.parent.redefine(ident, value);
+        return { ok: false };
+    }
+    // ...
+}
+```
+
+If the symbol is defined locally, ressign the value. Else if a the parent node is defined, defer to the parent. Otherwise, return a not-found result.
 
 ## 4.3 Control flow
 
@@ -204,6 +225,34 @@ For ease of use, we'll add some functions to create the commonly used flow types
 function flowWalue(value: Value): Flow {
     return { type: "value", value };
 }
+```
+
+### 4.3.2 Flow utility functions
+
+Because we're most interested in the control flow of value type, we'll make a function to conveniently filter out non-value control flow.
+
+```ts
+function expectValue(flow: Flow): [null, Flow] | [Value, Flow] {
+    if (flow.type !== "value")
+        return [null, flow];
+    return [flow.value, flow];
+}
+```
+
+We now have these 2 options for unwrapping control flow.
+
+1)
+```ts
+const valueFlow = this.evalExpr(...);
+if (valueFlow !== "value")
+    return valueFlow;
+const value = valueFlow.value;
+```
+2)
+```ts
+const [value, flow] = expectValue(this.evalExpr(...));
+if (!value)
+    return flow;
 ```
 
 ## 4.4 The evaluator class
@@ -230,6 +279,29 @@ class Evaluator {
 ```
 
 The `defineBuiltins` function will be defined later.
+
+### 4.4.2 Function definitions
+
+The evaluator needs a way to keep track of function definitions, so that we later can call and evaluate the function. Our definition of a function definition will be the following.
+
+```ts
+type FnDef = {
+    params: string[],
+    body: Expr,
+    id: number,
+};
+```
+
+The parameters are needed, so that we can verify when calling, that we call with the correct amount of arguments. The body is the AST expression to be evaluated. And an identifier, so that we can refer to the definition by it's id `fnDefId`.
+
+```ts
+class Evaluator {
+    private fnDefs: FnDef[] = [];
+    // ...
+}
+```
+
+We'll also add an array of function definitions to the evaluator class. The index of a function definition will also be it's id.
 
 ## 4.5 Expressions
 
@@ -305,7 +377,7 @@ class Evaluator {
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
         if (expr.type === "group") {
-            return this.evalExpr(expr.expr);
+            return this.evalExpr(expr.expr, syms);
         }
         // ...
     }
@@ -323,10 +395,9 @@ class Evaluator {
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
         if (expr.type === "field") {
-            const subjectFlow = this.evalExpr(expr.subject);
-            if (subjectFlow.type !== "value")
+            const [subject, subjectFlow] = expectValue(this.evalExpr(expr.subject, syms));
+            if (!subject)
                 return subjectFlow;
-            const subject = subjectFlow.value;
             if (subject.type !== "struct")
                 throw new Error(`cannot use field operator on ${subject.type} value`);
             if (!(expr.value in subject.fields))
@@ -349,14 +420,12 @@ class Evaluator {
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
         if (expr.type === "index") {
-            const valueFlow = this.evalExpr(expr.value);
-            if (valueFlow.type !== "value")
-                return valueFlow;
-            const value = valueFlow.value;
-            const subjectFlow = this.evalExpr(expr.subject);
-            if (subjectFlow.type !== "value")
+            const [subject, subjectFlow] = expectValue(this.evalExpr(expr.subject, syms));
+            if (!subject)
                 return subjectFlow;
-            const subject = subjectFlow.value;
+            const [value, valueFlow] = expectValue(this.evalExpr(expr.value, syms));
+            if (!value)
+                return valueFlow;
             if (subject.type === "struct") {
                 if (value.type !== "string")
                     throw new Error(`cannot index into struct with ${value.type} value`);
@@ -386,9 +455,9 @@ class Evaluator {
                     const negativeIndex = subject.values.length + value.value;
                     if (negativeIndex < 0 || negativeIndex >= subject.values.length)
                         throw new Error("index out of range");
-                    return flowValue(subject.value.charCodeAt(negativeIndex));
+                    return flowValue({ type: "int", value: subject.value.charCodeAt(negativeIndex) });
                 }
-                return flowValue(subject.value.charCodeAt(value.value));
+                return flowValue({ type: "int", value: subject.value.charCodeAt(value.value) });
             }
             throw new Error(`cannot use index operator on ${subject.type} value`);
         }
@@ -410,28 +479,330 @@ class Evaluator {
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
         if (expr.type === "call") {
-            const subjectFlow = this.evalExpr(expr.subject);
-            if (subjectFlow.type !== "value")
+            const [subject, subjectFlow] = expectValue(this.evalExpr(expr.subject, syms));
+            if (!subject)
                 return subjectFlow;
-            const subject = subjectFlow.value;
             const args: Value[] = [];
             for (const arg of expr.args) {
-                const valueFlow = this.evalExpr(arg);
-                if (valueFlow.type !== "value")
+                const [value, valueFlow] = expectValue(this.evalExpr(expr.value, syms));
+                if (!value)
                     return valueFlow;
-                args.push(valueFlow);
+                args.push(value);
+            }
+            if (subject.type === "builtin") {
+                return this.executeBuiltin(subject.name, args);
             }
             if (subject.type !== "fn")
-                throw new Error(`cannot use field operator on ${subject.type} value`);
-            if (!(expr.value in subject.fields))
-                throw new Error(`field ${expr.value} does not exist on struct`);
-            return subject.fields[expr.value];
+                throw new Error(`cannot use call operator on ${subject.type} value`);
+            if (!(subject.fnDefId in this.fnDefs))
+                throw new Error("invalid function definition id");
+            const fnDef = this.fnDefs[subject.fnDefId];
+            if (fnDef.args.length !== args.length)
+                throw new Error("incorrect amount of arguments in call to function");
+            let fnScopeSyms = new Syms(this.root);
+            for (const [i, argName] in fnDef.args.entries()) {
+                fnScopeSyms.define(argName, args[i]);
+            }
+            const flow = this.evalExpr(fnDef.body, fnScopeSyms);
+            if (flow.type === "return")
+                return flowValue(flow.value);
+            if (flow.type !== "value")
+                throw new Error(`${flow.type} on the loose!`);
+            return flow;
         }
         // ...
     }
     // ...
 }
 ```
+
+The first thing we do is evaluate the subject expression of the call (`subject(...args)`). If that yeilds a value, we continue. Then we evaluate each of the arguments in order. If evaluation of an argument doesn't yeild a value, we return immediately. Then, if the subject evaluated to a builtin value, we call `executeBuiltin`, which we will define later, with the builtin name and call arguments. Otherwise, we assert that the subject value is a function and that a function definition with the id exists. We then check that the correct amount of arguments are passed. Then, we make a new symbol table with the root table as parent, which will be the called functions symbols. We assign each argument value to the corrosponding parameter name, dictated by argument order. We then evaluate the function body. Finally, we check that the control flow results in either a value, which we simply return, or a return flow, which we convert to a value.
+
+### 4.5.7 Unary expressions
+
+Next, we will implement evaluation of unary expressions, meaning postfix expressions with one operand such as when using the `not` operator.
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        // ...
+        if (expr.type === "unary") {
+            if (expr.unaryType === "not") {
+                const [subject, subjectFlow] = expectValue(this.evalExpr(expr.subject, syms));
+                if (!subject)
+                    return subjectFlow;
+                if (subject.type === "bool") {
+                    return flowValue({ type: "bool", value: !subject.value });
+                }
+                throw new Error(`cannot apply not operator on type ${subject.type}`);
+            }
+            throw new Error(`unhandled unary operation ${expr.unaryType}`);
+        }
+    // ...
+    }
+    // ...
+}
+```
+
+The not operator should only work on values of type bool.
+
+### 4.5.8 Binary expressions
+
+Binary expressions conceptually are similiar to unary expressions, so too is the implementation.
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        // ...
+        if (expr.type === "binary") {
+            const [left, leftFlow] = expectValue(this.evalExpr(expr.left, syms));
+            if (!left)
+                return leftFlow;
+            const [right, rightFlow] = expectValue(this.evalExpr(expr.right, syms));
+            if (!right)
+                return rightFlow;
+            if (expr.binaryType === "+") {
+                if (left.type === "int" && right.type === "int") {
+                    return flowValue({ type: "int", value: left.value + right.value });
+                }
+                if (left.type === "string" && right.type === "string") {
+                    return flowValue({ type: "string", value: left.value + right.value });
+                }
+                throw new Error(`cannot apply ${expr.binaryType} operator on types ${left.type} and ${right.type}`);
+            }
+            if (expr.binaryType === "==") {
+                if (left.type === "null" && right.type === "null") {
+                    return flowValue({ type: "bool", value: true });
+                }
+                if (left.type === "null" && right.type !== "null") {
+                    return flowValue({ type: "bool", value: false });
+                }
+                if (left.type !== "null" && right.type === "null") {
+                    return flowValue({ type: "bool", value: false });
+                }
+                if (["int", "string", "bool"].includes(left.type) && left.type === right.type) {
+                    return flowValue({ type: "bool", value: left.value === right.value });
+                }
+                throw new Error(`cannot apply ${expr.binaryType} operator on types ${left.type} and ${right.type}`);
+            }
+            throw new Error(`unhandled binary operation ${expr.unaryType}`);
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+Add operation (`+`) is straight forward. Evaluate the left expressions, evaluate the right expressions and return a value with the result of adding left and right. Addition should work on integers and strings. Add string two strings results in a new string consisting of the left and right values concatonated.
+
+The equality operator (`==`) is a bit more complicated. It only results in values of type bool. You should be able to check if any value is null. Otherwise, comparison should only be allowed on two values of same type.
+
+#### Exercises
+
+1. Implement the binary operators: `-`, `*`, `/`, `!=`, `<`, `>`, `<=`, `>=`, `or` and `and`.
+
+### 4.5.9 If expressions
+
+An if expression should evaluate either the truthy expression or the falsy expression, depending on the condition expression. It should return the resulting value or a null value in case the condition is false and no falsy expression was supplied.
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        // ...
+        if (expr.type === "if") {
+            const [condition, conditionFlow] = expectValue(this.evalExpr(expr.condition, syms));
+            if (!condition)
+                return conditionFlow;
+            if (condition.type !== "bool")
+                throw new Error(`cannot use value of type ${subject.type} as condition`);
+            if (condition.value)
+                return this.evalExpr(expr.truthy, syms);
+            if (expr.falsy)
+                return this.evalExpr(exor.falsy, syms);
+            return flowValue({ type: "null" });
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+We start by evaluating the condition expression. The condition value should be a bool value. Then, depending on the condition value, we either evaluate the truthy or the falsy branch, or return null.
+
+### 4.5.10 Loop expressions
+
+Next, we'll implement the loop expression. The loop expression will repeatedly evaluate the body expression while throwing away the resulting values, until it results in breaking control flow. If the control flow is of type break, the loop expression itself will evalute to the break's value.
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        // ...
+        if (expr.type === "loop") {
+            while (true) {
+                const flow = this.evaluate(expr.body, syms);
+                if (flow.type === "break")
+                    return flowValue(flow.value);
+                if (flow.type !== "value")
+                    return flow;
+            }
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+First, start an infinite loop. In each iteration, evalute the loop body. If the resulting control flow is breaking, return the break value. If the control flow is not a value, meaning return or other unimplemented control flow, just return the control flow. Otherwise, discard the value and repeate.
+
+
+## 4.5.11 Block expressions
+
+The block expressions evaluate the statements in order, discard their values and return the value of the tailing expression if present, else a null. Symbols are scoped inside the block.
+
+```ts
+class Evaluator {
+    // ...
+    public evalExpr(expr: Expr, syms: Syms): Flow {
+        // ...
+        if (expr.type === "block") {
+            let scopeSyms = new Syms(syms);
+            for (const stmt of block.stmts) {
+                const flow = this.evalStmt(stmt, scopeSyms);
+                if (flow.type !== "value")
+                    return flow;
+            }
+            if (expr.expr)
+                return this.evalExpr(expr.expr, scopeSyms);
+            return flowValue({ type: "null" });
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+Make a new symbol table with outer symbol table as parent. Iterate through each statement. If a statement results in breaking flow, return the flow. Then evaluate the tailing expression if present and return the result or a null value.
+
+### Excercises
+
+1. \* Refactor `evalExpr`, eg. move each expression type into its own function for evaluation, in order to make the code more manageable.
+2. \* Implement hex literals, array and struct literal syntax in evaluator.
+
+## 4.6 Statements
+
+For evaluating statements, we'll make a function called `evalStmt` .
+
+```ts
+class Evaluator {
+    // ...
+    public evalStmt(stmt: Stmt): Flow {
+        if (stmt.type === "error") {
+            throw new Error("error in AST");
+        }
+        // ...
+        throw new Error(`unknown stmt type "${expr.type}"`);
+    }
+    // ...
+}
+```
+
+The `evalStmt` function, like `evalExpr` or expressions, will take a statement and a symbol table, match the type of the statement and return a flow. Handle errors in AST and unknown statement types likewise.
+
+### 4.6.1 Break statements
+
+The break statement simply returns a breaking flow, and an optional value, depending on if it is present.
+
+```ts
+class Evaluator {
+    // ...
+    public evalStmt(stmt: Stmt): Flow {
+        // ...
+        if (stmt.type === "break") {
+            if (!stmt.expr)
+                return { type: "break" };
+            const [value, valueFlow] = expectValue(this.evalExpr(stmt.expr));
+            if (!value)
+                return valueFlow;
+            return { type: "break", value };
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+If the expression is not a value, the resulting flow is returned, as inner break statements or return flow should take precedence.
+
+### 4.6.2 Return statements
+
+The return statement returns a returning flow, and, like break, an optional value, depending on if it is present.
+
+```ts
+class Evaluator {
+    // ...
+    public evalStmt(stmt: Stmt): Flow {
+        // ...
+        if (stmt.type === "return") {
+            if (!stmt.expr)
+                return { type: "return" };
+            const [value, valueFlow] = expectValue(this.evalExpr(stmt.expr));
+            if (!value)
+                return valueFlow;
+            return { type: "return", value };
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+If the expression is not a value, like with the break statement, the resulting flow is returned, as inner break and return statements take precedence.
+
+### 4.6.3 Expression statements
+
+An expression statement is simply an expression used as a statement. It should be evaluated accordingly.
+
+```ts
+class Evaluator {
+    // ...
+    public evalStmt(stmt: Stmt): Flow {
+        // ...
+        if (stmt.type === "expr") {
+            return this.evalExpr(stmt.expr);
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+### 4.6.4 Assignment statements
+
+An assignment statement should assign a new value to either a symbol, a field or an array index. Because of this, we'll also have to look at the first layer of the subject expression.
+
+```ts
+class Evaluator {
+    // ...
+    public evalStmt(stmt: Stmt): Flow {
+        // ...
+        if (stmt.type === "assign") {
+            if (stmt.subject.type === "ident") {
+
+            }
+            throw new Error(`cannot assign to ${stmt.subject.type} expression`);
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+
+
 
 ```ts
 class Evaluator {

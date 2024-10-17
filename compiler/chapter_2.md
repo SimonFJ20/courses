@@ -415,7 +415,7 @@ while (token !== null) {
 }
 ```
 
-## 2.10 Exercises
+## Exercises
 
 1. Implement the operators: `-`, `*`, `/`, `(`, `)`, `.`, `,`, `;`, `[`, `]`, `!=`, `<`, `>`, `<=` and `>=`.
 2. Implement the keywords: `true`, `false`, `null`, `or`, `and`, `not`, `loop`, `break`, `let`, `fn` and `return`.
