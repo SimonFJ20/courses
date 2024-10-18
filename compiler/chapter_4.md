@@ -130,7 +130,9 @@ Symbols are introduced in such statements as let and function defitions, the lat
 To keep track of symbols throughout evaluation, we'll create a data structure to store symbols, ie. map identifiers to their definition values.
 
 ```ts
-type SymMap = { [ident: string]: Value }
+type Sym = { value: Value, pos?: Pos }
+
+type SymMap = { [ident: string]: Sym }
 
 class Syms {
     private syms: SymMap = {};
@@ -140,15 +142,15 @@ class Syms {
 }
 ```
 
-The `SymMap` type is a key value map, which maps identifiers to their definition. To keep track of symbols in regard to scopes, we also define a `Syms` class. An instance of `Syms` is a node in a tree structure.
+The `Sym` structure represents a symbol, and contains it's details such as the value and the position where the symbol is declared. The `SymMap` type is a key value map, which maps identifiers to their definition. To keep track of symbols in regard to scopes, we also define a `Syms` class. An instance of `Syms` is a node in a tree structure.
 
 We'll define a method for defining symbols.
 
 ```ts
 class Syms {
     // ...
-    public define(ident: string, value: Value) {
-        this.syms[ident] = value;
+    public define(ident: string, sym: Sym) {
+        this.syms[ident] = sym;
     }
     // ...
 }
@@ -166,14 +168,14 @@ class Syms {
 }
 ```
 
-And then, we'll define a method for getting the value of a defined symbol.
+And then, we'll define a method for getting the symbol by its identifier.
 
 ```ts
 class Syms {
     // ...
-    public get(ident: string): { ok: true, value: Value } | { ok: false } {
+    public get(ident: string): { ok: true, sym: Sym } | { ok: false } {
         if (ident in this.syms)
-            return { ok: true, value: this.syms[ident] };
+            return { ok: true, sym: this.syms[ident] };
         if (this.parent)
             return this.parent.get(ident);
         return { ok: false };
@@ -182,27 +184,7 @@ class Syms {
 }
 ```
 
-If the symbol is defined locally, return the value. Else if a the parent node is defined, defer to the parent. Otherwise, return a not-found result.
-
-Then we'll need a function for redefining existing symbols.
-
-```ts
-class Syms {
-    // ...
-    public redefine(ident: string, value: Value): { ok: true } | { ok: false } {
-        if (ident in this.syms) {
-            this.syms[ident] = value;
-            return { ok: true }
-        }
-        if (this.parent)
-            return this.parent.redefine(ident, value);
-        return { ok: false };
-    }
-    // ...
-}
-```
-
-If the symbol is defined locally, ressign the value. Else if a the parent node is defined, defer to the parent. Otherwise, return a not-found result.
+If the symbol is defined locally, return the symbol. Else if a the parent node is defined, defer to the parent. Otherwise, return a not-found result.
 
 ## 4.3 Control flow
 
@@ -286,7 +268,7 @@ The evaluator needs a way to keep track of function definitions, so that we late
 
 ```ts
 type FnDef = {
-    params: string[],
+    params: Param[],
     body: Expr,
     id: number,
 };
@@ -334,7 +316,7 @@ class Evaluator {
             const result = syms.get(expr.value);
             if (!result.ok)
                 throw new Error(`undefined symbol "${expr.value}"`);
-            return flowValue(result.value);
+            return flowValue(result.sym.value);
         }
         // ...
     }
@@ -490,18 +472,18 @@ class Evaluator {
                 args.push(value);
             }
             if (subject.type === "builtin") {
-                return this.executeBuiltin(subject.name, args);
+                return this.executeBuiltin(subject.name, args, syms);
             }
             if (subject.type !== "fn")
                 throw new Error(`cannot use call operator on ${subject.type} value`);
             if (!(subject.fnDefId in this.fnDefs))
                 throw new Error("invalid function definition id");
             const fnDef = this.fnDefs[subject.fnDefId];
-            if (fnDef.args.length !== args.length)
+            if (fnDef.params.length !== args.length)
                 throw new Error("incorrect amount of arguments in call to function");
             let fnScopeSyms = new Syms(this.root);
-            for (const [i, argName] in fnDef.args.entries()) {
-                fnScopeSyms.define(argName, args[i]);
+            for (const [i, param] in fnDef.params.entries()) {
+                fnScopeSyms.define(param.ident, { value: args[i], pos: param.pos });
             }
             const flow = this.evalExpr(fnDef.body, fnScopeSyms);
             if (flow.type === "return")
@@ -516,7 +498,7 @@ class Evaluator {
 }
 ```
 
-The first thing we do is evaluate the subject expression of the call (`subject(...args)`). If that yeilds a value, we continue. Then we evaluate each of the arguments in order. If evaluation of an argument doesn't yeild a value, we return immediately. Then, if the subject evaluated to a builtin value, we call `executeBuiltin`, which we will define later, with the builtin name and call arguments. Otherwise, we assert that the subject value is a function and that a function definition with the id exists. We then check that the correct amount of arguments are passed. Then, we make a new symbol table with the root table as parent, which will be the called functions symbols. We assign each argument value to the corrosponding parameter name, dictated by argument order. We then evaluate the function body. Finally, we check that the control flow results in either a value, which we simply return, or a return flow, which we convert to a value.
+The first thing we do is evaluate the subject expression of the call (`subject(...args)`). If that yeilds a value, we continue. Then we evaluate each of the arguments in order. If evaluation of an argument doesn't yeild a value, we return immediately. Then, if the subject evaluated to a builtin value, we call `executeBuiltin`, which we will define later, with the builtin name, call arguments and symbol sable. Otherwise, we assert that the subject value is a function and that a function definition with the id exists. We then check that the correct amount of arguments are passed. Then, we make a new symbol table with the root table as parent, which will be the called functions symbols. We assign each argument value to the corrosponding parameter name, dictated by argument order. We then evaluate the function body. Finally, we check that the control flow results in either a value, which we simply return, or a return flow, which we convert to a value.
 
 ### 4.5.7 Unary expressions
 
@@ -699,7 +681,7 @@ For evaluating statements, we'll make a function called `evalStmt` .
 ```ts
 class Evaluator {
     // ...
-    public evalStmt(stmt: Stmt): Flow {
+    public evalStmt(stmt: Stmt, syms: Syms): Flow {
         if (stmt.type === "error") {
             throw new Error("error in AST");
         }
@@ -719,7 +701,7 @@ The break statement simply returns a breaking flow, and an optional value, depen
 ```ts
 class Evaluator {
     // ...
-    public evalStmt(stmt: Stmt): Flow {
+    public evalStmt(stmt: Stmt, syms: Syms): Flow {
         // ...
         if (stmt.type === "break") {
             if (!stmt.expr)
@@ -744,7 +726,7 @@ The return statement returns a returning flow, and, like break, an optional valu
 ```ts
 class Evaluator {
     // ...
-    public evalStmt(stmt: Stmt): Flow {
+    public evalStmt(stmt: Stmt, syms: Syms): Flow {
         // ...
         if (stmt.type === "return") {
             if (!stmt.expr)
@@ -769,7 +751,7 @@ An expression statement is simply an expression used as a statement. It should b
 ```ts
 class Evaluator {
     // ...
-    public evalStmt(stmt: Stmt): Flow {
+    public evalStmt(stmt: Stmt, syms: Syms): Flow {
         // ...
         if (stmt.type === "expr") {
             return this.evalExpr(stmt.expr);
@@ -787,11 +769,61 @@ An assignment statement should assign a new value to either a symbol, a field or
 ```ts
 class Evaluator {
     // ...
-    public evalStmt(stmt: Stmt): Flow {
+    public evalStmt(stmt: Stmt, syms: Syms): Flow {
         // ...
         if (stmt.type === "assign") {
+            const [value, valueFlow] = expectValue(this.evalExpr(stmt.value, syms));
+            if (!value)
+                return valueFlow;
             if (stmt.subject.type === "ident") {
-
+                const ident = stmt.subject.value;
+                const { ok: found, sym } = syms.get(ident);
+                if (!found)
+                    throw new Error(`cannot assign to undefined symbol "${ident}"`);
+                if (sym.value.type !== value.type)
+                    throw new Error(`cannot assign value of type ${value.type} to symbol originally declared ${sym.value.type}`);
+                sym.value = value;
+                return valueFlow({ type: "null" });
+            }
+            if (stmt.subject.type === "field") {
+                const [subject, subjectFlow] = expectValue(this.evalExpr(stmt.subject.subject, syms));
+                if (!subject)
+                    return subjectFlow;
+                if (subject.type !== "struct")
+                    throw new Error(`cannot use field operator on ${subject.type} value`);
+                subject.fields[stmt.subject.value] = value;
+                return valueFlow({ type: "null" });
+            }
+            if (stmt.subject.type === "index") {
+                const [subject, subjectFlow] = expectValue(this.evalExpr(stmt.subject.subject, syms));
+                if (!subject)
+                    return subjectFlow;
+                const [index, indexFlow] = expectValue(this.evalExpr(stmt.subject.value, syms));
+                if (!index)
+                    return valueFlow;
+                if (subject.type === "struct") {
+                    if (index.type !== "string")
+                        throw new Error(`cannot index into struct with ${index.type} value`);
+                    subject.fields[index.value] = value;
+                    return valueFlow({ type: "null" });
+                }
+                if (subject.type === "array") {
+                    if (index.type !== "int")
+                        throw new Error(`cannot index into array with ${index.type} value`);
+                    if (index.value >= subject.values.length)
+                        throw new Error("index out of range");
+                    if (index.value >= 0) {
+                        subject.value[index.value] = value;
+                    } else {
+                        const negativeIndex = subject.values.length + index.value;
+                        if (negativeIndex < 0 || negativeIndex >= subject.values.length)
+                            throw new Error("index out of range");
+                        subject.value[negativeIndex] = value;
+                        return valueFlow({ type: "null" });
+                    }
+                    return valueFlow({ type: "null" });
+                }
+                throw new Error(`cannot use field operator on ${subject.type} value`);
             }
             throw new Error(`cannot assign to ${stmt.subject.type} expression`);
         }
@@ -801,26 +833,44 @@ class Evaluator {
 }
 ```
 
+We start by evaluating the assigned value, meaning the value expression is evaluated before the assigned-to subject expression.
 
+For assigning to identifiers, eg. `a = 5`, we start by finding the symbol. If not found, we raise an error. Then we check that the old and new values are the same type. Then we assign the new value to the symbol.
 
+For assigning to fields, eg. `a.b = 5`, we evaluate the inner (field expression) subject expression, `a` in this case. Then we reassign the field value or assign to a new field, if it doesn't exist.
+
+And then, for assigning to indeces, eg. `a[b] = 5`, we evalute the inner (index expression) subject `a` and index value `b` in that order. If `a` is a struct, we check that `b` is a string and assign to the field, the string names. Else, if `a` is an array, we check that `b` is an int and assign to the index or negative index (see 4.5.5 Index expressions).
+
+## 4.6.5 Let statements
+
+A let statement declares and initializes a new symbol.
 
 ```ts
 class Evaluator {
-    private root = new Syms();
-
-    public evalStmts(stmts: Stmt[]): Flow {
+    // ...
+    public evalStmt(stmt: Stmt, syms: Syms): Flow {
+        // ...
+        if (stmt.type === "let") {
+            if (syms.definedLocally(stmt.param.ident))
+                throw new Error(`cannot redeclare symbol "${stmt.param.ident}"`);
+            const [value, valueFlow] = expectValue(this.evalExpr(stmt.value, syms));
+            if (!value)
+                return valueFlow;
+            syms.define(stmt.param.ident, value);
+            return valueFlow({ type: "null" });
+        }
         // ...
     }
+    // ...
+}
+```
 
-    public evalStmt(stmt: Stmt): Flow {
-        // ...
-    }
+A let statement cannot redeclare a symbol that already exists in the same scope. Therefore we first check if that the symbol does not already exist. Then we evaluate the value and define the symbol.
 
-    public evalExpr(expr: Expr): Flow {
-        // ...
-    }
-
-    private executeBuiltin(name: string, args: Value[]): Flow {
+```ts
+class Evaluator {
+    // ...
+    private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
         if (name === "array") {
             return flowValue({ type: "array", values: [] });
         } else if (name === "struct") {
@@ -849,13 +899,14 @@ class Evaluator {
             throw new Error(`unknown builtin "${name}"`);
         }
     }
-
+    // ...
     public defineBuiltins() {
         this.root.define("array", { type: "builtin_fn", name: "array" });
         this.root.define("struct", { type: "builtin_fn", name: "struct" });
         this.root.define("push", { type: "builtin_fn", name: "struct" });
         this.root.define("println", { type: "builtin_fn", name: "println" });
     }
+    // ...
 }
 ```
 
