@@ -35,8 +35,6 @@ The `type` field contians the *token type*, eg. `"int"`, `"+"`, etc. The `pos` f
 
 ## 2.2 Transformation iterator
 
-The lexer I propose is implemented as a 'transformation' of one iterator, a text character iterator, into a token iterator.
-
 Let's start with the lexer code from chapter 1.
 
 ```ts
@@ -62,7 +60,7 @@ class Lexer {
 }
 ```
 
-The difference is that before when calling `lex` you would get an array of all tokens, now you instanciate a `Lexer` and call the `.next()` function for each token, until the end-of-file (EOF).
+The difference is that before when calling `lex` you would get an array of all tokens, now you instantiate a `Lexer` and call the `.next()` function for each token, until the end-of-file (EOF).
 
 I'll add 3 functions for iterating through characters of the text:
 
@@ -172,7 +170,7 @@ class Lexer {
 }
 ```
 
-When we've checked, we haven't hit EOF yet, we get the current position. In `.next()` we should return after each valid token. This means, when we hit the end, we could not make any token, therefore we report an error. After reporting, we step over the character, essentially ignoring it, and call `.next()` recursively to start again. We don't need to stop the compilation, just because we hit an invalid character.
+When we've checked, that we haven't hit EOF yet, we get the current position. In `.next()` we should return after each valid token. This means, when we hit the end, we could not make any token, therefore we report an error. After reporting, we step over the character, essentially ignoring it, and call `.next()` recursively to start again. We don't need to stop the compilation, just because we hit an invalid character.
 
 The scaffolding is now complete.
 
@@ -228,11 +226,11 @@ class Lexer {
 
 ## 2.5 Identifiers and keywords
 
-Identifiers, also called names or symbols, are what we use to refer to functions, variables, etc. Keywords are the special words we use in specialt syntax, such as `if`-statements.
+Identifiers, also called names or symbols, are what we use to refer to functions, variables, etc. Keywords are the special words we use in special syntax, such as `if`-statements.
 
-To lex identifiers and keywords, we'll look for identifier characters, find all the characters in an identifier, save the text value.
+To lex identifiers and keywords, we'll look for identifier characters, find all the characters in an identifier, and save the text value.
 
-Identifers can start with a letter or an underscore `[a-zA-Z_]`, but not numbers `[0-9]`, because that would be hard to implement. Every character after the first may also contain numbers, ie. `[a-zA-Z_0-9]`.
+Identifiers can start with a letter or an underscore `[a-zA-Z_]`, but not numbers `[0-9]`, because that would be hard to implement. Every character after the first may also contain numbers, ie. `[a-zA-Z_0-9]`.
 
 Lastly, we check if the identifier is in fact not an identifier, but one of the hardcoded keywords.
 
@@ -266,7 +264,7 @@ Again we use the if-while pattern to match multiple characters. Each character i
 
 ## 2.6 Integers
 
-Integers, just like identifers, are sequences of characters. Unlike identifiers, there are no keywords (keynumbers) we need to be aware of. An integer, in this language, is a sequence consisting of and starting with any number characters `[0-9]`. (Sidenote: In most other languages, a base 10 integer is __either__ a `0` character or a sequence starting with any number __except zero__ `[1-9]`, after the first character any number is allowed.)
+Integers, just like identifiers, are sequences of characters. Unlike identifiers, there are no keywords (keynumbers) we need to be aware of. An integer, in this language, is a sequence consisting of and starting with any number characters `[0-9]`. (Sidenote: In most other languages, a base 10 integer is __either__ a `0` character or a sequence starting with any number __except zero__ `[1-9]`, after the first character any number is allowed.)
 
 After matching the integer, we also parse the string representing a number into the number value itself.
 
@@ -340,7 +338,7 @@ class Lexer {
 
 A string starts with a double quote `"`. This character is ignored. We then look at every character up until an __unescaped__ double quote `"`, meaning a string may contain escaped double quote characters `\"`. When the loop is done, we check whether we've hit a closing double quote `"` or if we've reached EOF. If we've reached EOF, we emit an error and return a special `error` token. If we've reached the enclosing quote `"`, we ignore and step over it and return a string token.
 
-While looking at each character, we check if it's a backslash `\`. If so, we ignore the escaping backslash and handle the next character like either specialt characters, eg. `n` should be a newline character, or just an escaped character, eg. an escaped double quote.
+While looking at each character, we check if it's a backslash `\`. If so, we ignore the escaping backslash and handle the next character like either special characters, eg. `n` should be a newline character, or just an escaped character, eg. an escaped double quote.
 
 ## 2.8 Static tokens
 
@@ -370,7 +368,7 @@ The clause checks for any one of the characters. For single character tokens, it
 
 Note: The reason `+`, `{`, `}` are escaped, is because they are special regex characters. In Javascript all non-letters can safely be escaped and all letters are safe to use.
 
-The above code can also be writte like this:
+The above code can also be written like this:
 ```ts
 class Lexer {
     // ...
@@ -394,7 +392,7 @@ class Lexer {
 }
 ```
 
-The former is shorter the latter is more readable.
+The former is shorter, the latter is more readable.
 
 ## 2.9 Testing
 

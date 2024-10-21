@@ -9,7 +9,7 @@ This is what I'll propose for the input language.
 
 Subtract 12 from 34:
 ```py
-+ 34 12
+- 34 12
 ```
 Add 2 to the result of multiplying 3 by 4:
 ```py
@@ -24,8 +24,8 @@ The rationale: I've chosen [polish notation](https://en.wikipedia.org/wiki/Polis
 
 ### Exercises
 
-1. Write `2 + 3 * 4` and `(2 + 3) * 4` in the source language. What's the difference?
-2. Does the source langauge need parenthesis `(`, `)`? Why/why not?
+1. Try to translate the math expressions `2 + 3 * 4` and `(2 + 3) * 4` into the source language described. How do the two expressions differ?
+2. Does the source language need parenthesis `(`, `)`? Why/why not?
 
 ## 1.2 Representation in code
 
@@ -66,7 +66,7 @@ const expr = {
 
 ## 1.3 Evaluating expressions
 
-To evaluate the expressions means to calculate the result. I've show how to represent the input program above in code form.
+To evaluate the expressions means to calculate the result. I've shown how to represent the input program above in code form.
 
 To evaluate, we use a function, which takes each 'node' and calculates the result. I'll propose this implementation in Javascript:
 
@@ -95,7 +95,7 @@ const result = evaluateExpr(expr);
 console.log(result); // should be 7
 ```
 
-Important to notice in the implementation is the calls to the function itself. (We call `evaluateExpr` inside the body of `evaluateExpr`). This is called recursion, is perfectly allowed and is quite for this program.
+Important to notice in the implementation is the calls to the function itself. (We call `evaluateExpr` inside the body of `evaluateExpr`). This is called recursion, it's perfectly allowed and is quite useful for this program.
 
 ### Exercises
 
@@ -104,7 +104,7 @@ Important to notice in the implementation is the calls to the function itself. (
 
 ## 1.4 Parsing source code
 
-The user don't want to write expressions in as object representation. They want to write the source code notation. To make our program understand the input program, it will have to be able to parse the source language.
+Users don't want to write their programs as object representation. Instead, they want to write their programs in source code. To make our program understand the input program, it needs to be able to parse the source language.
 
 I'll propose an implementation in which I'll split parsing up in 2 steps.
 
@@ -129,7 +129,7 @@ const tokens = [
 ];
 ```
 
-Important to note, is that the tokens in this step do not represent structure in the code. (The representation doesn't it's an add expression). It instead does 2 things:
+Important to note, is that the tokens in this step do not represent structure in the code. (The representation doesn't know it is an add-expression). It instead does 2 things:
 1. It groups together text characters. (`12` is 2 text characters but 1 token).
 2. It assigns a type to each token, (`12` and `34` are both integers).
 
