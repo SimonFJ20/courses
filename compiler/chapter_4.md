@@ -85,12 +85,12 @@ function valueToString(value: Value): string {
         return value.value ? "true" : "false";
     }
     if (value.type === "array") {
-        const valueStrings = result.values
+        const valueStrings = value.values
             .map(value => value.toString());
         return `[${valueStrings.join(", ")}]`;
     }
     if (value.type === "struct") {
-        const fieldStrings = Object.entries(result.fields)
+        const fieldStrings = Object.entries(value.fields)
             .map(([key, value]) => `${key}: ${valueToString(value)}`);
         return `struct { ${fieldStrings.join(", ")} }`;
     }
@@ -137,7 +137,7 @@ type SymMap = { [ident: string]: Sym }
 class Syms {
     private syms: SymMap = {};
 
-    public constructor(private parent?: SymMap) {}
+    public constructor(private parent?: Syms) {}
     // ...
 }
 ```
@@ -255,8 +255,6 @@ We'll want a *root* symbol table, which stores all the predefined symbols. We al
 class Evaluator {
     private root = new Syms();
     // ...
-    public defineBuiltins() { /*...*/ }
-    // ...
 }
 ```
 
@@ -292,12 +290,12 @@ Let's make a function `evalExpr` for evaluating expressions.
 ```ts
 class Evaluator {
     // ...
-    public evalExpr(expr: Expr): Flow {
-        if (expr.type === "error") {
+    public evalExpr(expr: Expr, syms: Expr): Flow {
+        if (expr.kind.type === "error") {
             throw new Error("error in AST");
         }
         // ...
-        throw new Error(`unknown expr type "${expr.type}"`);
+        throw new Error(`unknown expr type "${expr.kind.type}"`);
     }
     // ...
 }
@@ -312,10 +310,10 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "ident") {
-            const result = syms.get(expr.value);
+        if (expr.kind.type === "ident") {
+            const result = syms.get(expr.kind.value);
             if (!result.ok)
-                throw new Error(`undefined symbol "${expr.value}"`);
+                throw new Error(`undefined symbol "${expr.kind.value}"`);
             return flowValue(result.sym.value);
         }
         // ...
@@ -331,17 +329,17 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "null") {
+        if (expr.kind.type === "null") {
             return flowValue({ type: "null" });
         }
-        if (expr.type === "int") {
-            return flowValue({ type: "int", value: expr.value });
+        if (expr.kind.type === "int") {
+            return flowValue({ type: "int", value: expr.kind.value });
         }
-        if (expr.type === "string") {
-            return flowValue({ type: "string", value: expr.value });
+        if (expr.kind.type === "string") {
+            return flowValue({ type: "string", value: expr.kind.value });
         }
-        if (expr.type === "bool") {
-            return flowValue({ type: "int", value: expr.value });
+        if (expr.kind.type === "bool") {
+            return flowValue({ type: "bool", value: expr.kind.value });
         }
         // ...
     }
@@ -358,8 +356,8 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "group") {
-            return this.evalExpr(expr.expr, syms);
+        if (expr.kind.type === "group") {
+            return this.evalExpr(expr.kind.expr, syms);
         }
         // ...
     }
@@ -376,15 +374,15 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "field") {
-            const [subject, subjectFlow] = expectValue(this.evalExpr(expr.subject, syms));
+        if (expr.kind.type === "field") {
+            const [subject, subjectFlow] = expectValue(this.evalExpr(expr.kind.subject, syms));
             if (!subject)
                 return subjectFlow;
             if (subject.type !== "struct")
                 throw new Error(`cannot use field operator on ${subject.type} value`);
-            if (!(expr.value in subject.fields))
-                throw new Error(`field ${expr.value} does not exist on struct`);
-            return subject.fields[expr.value];
+            if (!(expr.kind.value in subject.fields))
+                throw new Error(`field ${expr.kind.value} does not exist on struct`);
+            return flowValue(subject.fields[expr.kind.value]);
         }
         // ...
     }
@@ -401,11 +399,11 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "index") {
-            const [subject, subjectFlow] = expectValue(this.evalExpr(expr.subject, syms));
+        if (expr.kind.type === "index") {
+            const [subject, subjectFlow] = expectValue(this.evalExpr(expr.kind.subject, syms));
             if (!subject)
                 return subjectFlow;
-            const [value, valueFlow] = expectValue(this.evalExpr(expr.value, syms));
+            const [value, valueFlow] = expectValue(this.evalExpr(expr.kind.value, syms));
             if (!value)
                 return valueFlow;
             if (subject.type === "struct") {
@@ -431,11 +429,11 @@ class Evaluator {
             if (subject.type === "string") {
                 if (value.type !== "int")
                     throw new Error(`cannot index into string with ${value.type} value`);
-                if (value.value >= subject.values.length)
+                if (value.value >= subject.value.length)
                     throw new Error("index out of range");
                 if (value.value < 0) {
-                    const negativeIndex = subject.values.length + value.value;
-                    if (negativeIndex < 0 || negativeIndex >= subject.values.length)
+                    const negativeIndex = subject.value.length + value.value;
+                    if (negativeIndex < 0 || negativeIndex >= subject.value.length)
                         throw new Error("index out of range");
                     return flowValue({ type: "int", value: subject.value.charCodeAt(negativeIndex) });
                 }
@@ -460,18 +458,18 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "call") {
-            const [subject, subjectFlow] = expectValue(this.evalExpr(expr.subject, syms));
+        if (expr.kind.type === "call") {
+            const [subject, subjectFlow] = expectValue(this.evalExpr(expr.kind.subject, syms));
             if (!subject)
                 return subjectFlow;
             const args: Value[] = [];
-            for (const arg of expr.args) {
-                const [value, valueFlow] = expectValue(this.evalExpr(expr.value, syms));
+            for (const arg of expr.kind.args) {
+                const [value, valueFlow] = expectValue(this.evalExpr(arg, syms));
                 if (!value)
                     return valueFlow;
                 args.push(value);
             }
-            if (subject.type === "builtin") {
+            if (subject.type === "builtin_fn") {
                 return this.executeBuiltin(subject.name, args, syms);
             }
             if (subject.type !== "fn")
@@ -482,7 +480,7 @@ class Evaluator {
             if (fnDef.params.length !== args.length)
                 throw new Error("incorrect amount of arguments in call to function");
             let fnScopeSyms = new Syms(this.root);
-            for (const [i, param] in fnDef.params.entries()) {
+            for (const [i, param] of fnDef.params.entries()) {
                 fnScopeSyms.define(param.ident, { value: args[i], pos: param.pos });
             }
             const flow = this.evalExpr(fnDef.body, fnScopeSyms);
@@ -509,9 +507,9 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "unary") {
-            if (expr.unaryType === "not") {
-                const [subject, subjectFlow] = expectValue(this.evalExpr(expr.subject, syms));
+        if (expr.kind.type === "unary") {
+            if (expr.kind.unaryType === "not") {
+                const [subject, subjectFlow] = expectValue(this.evalExpr(expr.kind.subject, syms));
                 if (!subject)
                     return subjectFlow;
                 if (subject.type === "bool") {
@@ -519,7 +517,7 @@ class Evaluator {
                 }
                 throw new Error(`cannot apply not operator on type ${subject.type}`);
             }
-            throw new Error(`unhandled unary operation ${expr.unaryType}`);
+            throw new Error(`unhandled unary operation ${expr.kind.unaryType}`);
         }
     // ...
     }
@@ -538,23 +536,23 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "binary") {
-            const [left, leftFlow] = expectValue(this.evalExpr(expr.left, syms));
+        if (expr.kind.type === "binary") {
+            const [left, leftFlow] = expectValue(this.evalExpr(expr.kind.left, syms));
             if (!left)
                 return leftFlow;
-            const [right, rightFlow] = expectValue(this.evalExpr(expr.right, syms));
+            const [right, rightFlow] = expectValue(this.evalExpr(expr.kind.right, syms));
             if (!right)
                 return rightFlow;
-            if (expr.binaryType === "+") {
+            if (expr.kind.binaryType === "+") {
                 if (left.type === "int" && right.type === "int") {
                     return flowValue({ type: "int", value: left.value + right.value });
                 }
                 if (left.type === "string" && right.type === "string") {
                     return flowValue({ type: "string", value: left.value + right.value });
                 }
-                throw new Error(`cannot apply ${expr.binaryType} operator on types ${left.type} and ${right.type}`);
+                throw new Error(`cannot apply ${expr.kind.binaryType} operator on types ${left.type} and ${right.type}`);
             }
-            if (expr.binaryType === "==") {
+            if (expr.kind.binaryType === "==") {
                 if (left.type === "null" && right.type === "null") {
                     return flowValue({ type: "bool", value: true });
                 }
@@ -564,12 +562,13 @@ class Evaluator {
                 if (left.type !== "null" && right.type === "null") {
                     return flowValue({ type: "bool", value: false });
                 }
-                if (["int", "string", "bool"].includes(left.type) && left.type === right.type) {
+                if ((left.type === "int" || left.type === "string" || left.type === "bool")
+                    && left.type === right.type) {
                     return flowValue({ type: "bool", value: left.value === right.value });
                 }
-                throw new Error(`cannot apply ${expr.binaryType} operator on types ${left.type} and ${right.type}`);
+                throw new Error(`cannot apply ${expr.kind.binaryType} operator on types ${left.type} and ${right.type}`);
             }
-            throw new Error(`unhandled binary operation ${expr.unaryType}`);
+            throw new Error(`unhandled binary operation ${expr.kind.binaryType}`);
         }
         // ...
     }
@@ -594,16 +593,16 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "if") {
-            const [condition, conditionFlow] = expectValue(this.evalExpr(expr.condition, syms));
-            if (!condition)
-                return conditionFlow;
-            if (condition.type !== "bool")
-                throw new Error(`cannot use value of type ${subject.type} as condition`);
-            if (condition.value)
-                return this.evalExpr(expr.truthy, syms);
-            if (expr.falsy)
-                return this.evalExpr(exor.falsy, syms);
+        if (expr.kind.type === "if") {
+            const [cond, condFlow] = expectValue(this.evalExpr(expr.kind.cond, syms));
+            if (!cond)
+                return condFlow;
+            if (cond.type !== "bool")
+                throw new Error(`cannot use value of type ${cond.type} as condition`);
+            if (cond.value)
+                return this.evalExpr(expr.kind.truthy, syms);
+            if (expr.kind.falsy)
+                return this.evalExpr(expr.kind.falsy, syms);
             return flowValue({ type: "null" });
         }
         // ...
@@ -623,9 +622,9 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "loop") {
+        if (expr.kind.type === "loop") {
             while (true) {
-                const flow = this.evaluate(expr.body, syms);
+                const flow = this.evalExpr(expr.kind.body, syms);
                 if (flow.type === "break")
                     return flowValue(flow.value);
                 if (flow.type !== "value")
@@ -650,15 +649,15 @@ class Evaluator {
     // ...
     public evalExpr(expr: Expr, syms: Syms): Flow {
         // ...
-        if (expr.type === "block") {
+        if (expr.kind.type === "block") {
             let scopeSyms = new Syms(syms);
-            for (const stmt of block.stmts) {
+            for (const stmt of expr.kind.stmts) {
                 const flow = this.evalStmt(stmt, scopeSyms);
                 if (flow.type !== "value")
                     return flow;
             }
-            if (expr.expr)
-                return this.evalExpr(expr.expr, scopeSyms);
+            if (expr.kind.expr)
+                return this.evalExpr(expr.kind.expr, scopeSyms);
             return flowValue({ type: "null" });
         }
         // ...
@@ -682,11 +681,11 @@ For evaluating statements, we'll make a function called `evalStmt` .
 class Evaluator {
     // ...
     public evalStmt(stmt: Stmt, syms: Syms): Flow {
-        if (stmt.type === "error") {
+        if (stmt.kind.type === "error") {
             throw new Error("error in AST");
         }
         // ...
-        throw new Error(`unknown stmt type "${expr.type}"`);
+        throw new Error(`unknown stmt type "${stmt.kind.type}"`);
     }
     // ...
 }
@@ -703,10 +702,10 @@ class Evaluator {
     // ...
     public evalStmt(stmt: Stmt, syms: Syms): Flow {
         // ...
-        if (stmt.type === "break") {
-            if (!stmt.expr)
-                return { type: "break" };
-            const [value, valueFlow] = expectValue(this.evalExpr(stmt.expr));
+        if (stmt.kind.type === "break") {
+            if (!stmt.kind.expr)
+                return { type: "break", value: { type: "null" } };
+            const [value, valueFlow] = expectValue(this.evalExpr(stmt.kind.expr, syms));
             if (!value)
                 return valueFlow;
             return { type: "break", value };
@@ -728,10 +727,10 @@ class Evaluator {
     // ...
     public evalStmt(stmt: Stmt, syms: Syms): Flow {
         // ...
-        if (stmt.type === "return") {
-            if (!stmt.expr)
-                return { type: "return" };
-            const [value, valueFlow] = expectValue(this.evalExpr(stmt.expr));
+        if (stmt.kind.type === "return") {
+            if (!stmt.kind.expr)
+                return { type: "return", value: { type: "null" } };
+            const [value, valueFlow] = expectValue(this.evalExpr(stmt.kind.expr, syms));
             if (!value)
                 return valueFlow;
             return { type: "return", value };
@@ -753,8 +752,8 @@ class Evaluator {
     // ...
     public evalStmt(stmt: Stmt, syms: Syms): Flow {
         // ...
-        if (stmt.type === "expr") {
-            return this.evalExpr(stmt.expr);
+        if (stmt.kind.type === "expr") {
+            return this.evalExpr(stmt.kind.expr, syms);
         }
         // ...
     }
@@ -771,41 +770,42 @@ class Evaluator {
     // ...
     public evalStmt(stmt: Stmt, syms: Syms): Flow {
         // ...
-        if (stmt.type === "assign") {
-            const [value, valueFlow] = expectValue(this.evalExpr(stmt.value, syms));
+        if (stmt.kind.type === "assign") {
+            const [value, valueFlow] = expectValue(this.evalExpr(stmt.kind.value, syms));
             if (!value)
                 return valueFlow;
-            if (stmt.subject.type === "ident") {
-                const ident = stmt.subject.value;
-                const { ok: found, sym } = syms.get(ident);
-                if (!found)
+            if (stmt.kind.subject.kind.type === "ident") {
+                const ident = stmt.kind.subject.kind.value;
+                const getResult = syms.get(ident);
+                if (!getResult.ok)
                     throw new Error(`cannot assign to undefined symbol "${ident}"`);
+                const { sym } = getResult;
                 if (sym.value.type !== value.type)
                     throw new Error(`cannot assign value of type ${value.type} to symbol originally declared ${sym.value.type}`);
                 sym.value = value;
-                return valueFlow({ type: "null" });
+                return flowValue({ type: "null" });
             }
-            if (stmt.subject.type === "field") {
-                const [subject, subjectFlow] = expectValue(this.evalExpr(stmt.subject.subject, syms));
+            if (stmt.kind.subject.type === "field") {
+                const [subject, subjectFlow] = expectValue(this.evalExpr(stmt.kind.subject.kind.subject, syms));
                 if (!subject)
                     return subjectFlow;
                 if (subject.type !== "struct")
                     throw new Error(`cannot use field operator on ${subject.type} value`);
-                subject.fields[stmt.subject.value] = value;
-                return valueFlow({ type: "null" });
+                subject.fields[stmt.kind.subject.kind.value] = value;
+                return flowValue({ type: "null" });
             }
-            if (stmt.subject.type === "index") {
-                const [subject, subjectFlow] = expectValue(this.evalExpr(stmt.subject.subject, syms));
+            if (stmt.kind.subject.kind.type === "index") {
+                const [subject, subjectFlow] = expectValue(this.evalExpr(stmt.kind.subject.kind.subject, syms));
                 if (!subject)
                     return subjectFlow;
-                const [index, indexFlow] = expectValue(this.evalExpr(stmt.subject.value, syms));
+                const [index, indexFlow] = expectValue(this.evalExpr(stmt.kind.subject.kind.value, syms));
                 if (!index)
-                    return valueFlow;
+                    return indexFlow;
                 if (subject.type === "struct") {
                     if (index.type !== "string")
                         throw new Error(`cannot index into struct with ${index.type} value`);
                     subject.fields[index.value] = value;
-                    return valueFlow({ type: "null" });
+                    return flowValue({ type: "null" });
                 }
                 if (subject.type === "array") {
                     if (index.type !== "int")
@@ -813,19 +813,19 @@ class Evaluator {
                     if (index.value >= subject.values.length)
                         throw new Error("index out of range");
                     if (index.value >= 0) {
-                        subject.value[index.value] = value;
+                        subject.values[index.value] = value;
                     } else {
                         const negativeIndex = subject.values.length + index.value;
                         if (negativeIndex < 0 || negativeIndex >= subject.values.length)
                             throw new Error("index out of range");
-                        subject.value[negativeIndex] = value;
-                        return valueFlow({ type: "null" });
+                        subject.values[negativeIndex] = value;
+                        return flowValue({ type: "null" });
                     }
-                    return valueFlow({ type: "null" });
+                    return flowValue({ type: "null" });
                 }
                 throw new Error(`cannot use field operator on ${subject.type} value`);
             }
-            throw new Error(`cannot assign to ${stmt.subject.type} expression`);
+            throw new Error(`cannot assign to ${stmt.kind.subject.kind.type} expression`);
         }
         // ...
     }
@@ -850,14 +850,14 @@ class Evaluator {
     // ...
     public evalStmt(stmt: Stmt, syms: Syms): Flow {
         // ...
-        if (stmt.type === "let") {
-            if (syms.definedLocally(stmt.param.ident))
-                throw new Error(`cannot redeclare symbol "${stmt.param.ident}"`);
-            const [value, valueFlow] = expectValue(this.evalExpr(stmt.value, syms));
+        if (stmt.kind.type === "let") {
+            if (syms.definedLocally(stmt.kind.param.ident))
+                throw new Error(`cannot redeclare symbol "${stmt.kind.param.ident}"`);
+            const [value, valueFlow] = expectValue(this.evalExpr(stmt.kind.value, syms));
             if (!value)
                 return valueFlow;
-            syms.define(stmt.param.ident, value);
-            return valueFlow({ type: "null" });
+            syms.define(stmt.kind.param.ident, { value: value, pos: stmt.pos });
+            return flowValue({ type: "null" });
         }
         // ...
     }
@@ -874,10 +874,10 @@ class Evaluator {
     // ...
     public evalStmt(stmt: Stmt, syms: Syms): Flow {
         // ...
-        if (stmt.type === "fn") {
-            if (syms.definedLocally(stmt.ident))
-                throw new Error(`cannot redeclare function "${stmt.ident}"`);
-            const { params, body } = stmt;
+        if (stmt.kind.type === "fn") {
+            if (syms.definedLocally(stmt.kind.ident))
+                throw new Error(`cannot redeclare function "${stmt.kind.ident}"`);
+            const { params, body } = stmt.kind;
 
             let paramNames: string[] = [];
             for (const param of params) {
@@ -888,8 +888,8 @@ class Evaluator {
 
             const id = this.fnDefs.length;
             this.fnDefs.push({ params, body, id });
-            this.syms.define(stmt.ident, { type: "fn", fnDefId: id });
-            return flowValue({ type: "none" });
+            syms.define(stmt.kind.ident, { value: { type: "fn", fnDefId: id }, pos: stmt.pos });
+            return flowValue({ type: "null" });
         }
         // ...
     }
@@ -908,7 +908,7 @@ class Evaluator {
     // ...
     public evalStmts(stmts: Stmt[], syms: Syms) {
         let scopeSyms = new Syms(syms);
-        for (const stmt of block.stmts) {
+        for (const stmt of stmts) {
             const flow = this.evalStmt(stmt, scopeSyms);
             if (flow.type !== "value")
                 throw new Error(`${flow.type} on the loose!`);
@@ -1063,9 +1063,9 @@ class Evaluator {
     private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
         // ...
         if (name === "println") {
-            if (args.length < 1)
+            if (args.length < 1 || args[0].type !== "string")
                 throw new Error("incorrect arguments");
-            let msg = args[0];
+            let msg = args[0].value;
             for (const arg of args.slice(1)) {
                 if (!msg.includes("{}"))
                     throw new Error("incorrect arguments");
@@ -1151,7 +1151,7 @@ class Evaluator {
             if (args.length !== 1 || args[0].type !== "string")
                 throw new Error("incorrect arguments");
             const value = parseInt(args[0].value);
-            if (value === NaN)
+            if (isNaN(value))
                 return flowValue({ type: "null" });
             return flowValue({ type: "int", value });
         }
@@ -1171,14 +1171,18 @@ Finally, we need a way to define the builtin functions in the symbol table.
 class Evaluator {
     // ...
     public defineBuiltins() {
-        this.root.define("array", { type: "builtin_fn", name: "array" });
-        this.root.define("struct", { type: "builtin_fn", name: "struct" });
-        this.root.define("array_push", { type: "builtin_fn", name: "array_push" });
-        this.root.define("array_len", { type: "builtin_fn", name: "array_len" });
-        this.root.define("string_concat", { type: "builtin_fn", name: "string_concat" });
-        this.root.define("string_len", { type: "builtin_fn", name: "string_len" });
-        this.root.define("println", { type: "builtin_fn", name: "println" });
-        this.root.define("exit", { type: "builtin_fn", name: "exit" });
+        function defineBuiltin(syms: Syms, name: string) {
+            syms.define(name, { value: { type: "builtin_fn", name } });
+        }
+
+        defineBuiltin(this.root, "array");
+        defineBuiltin(this.root, "struct");
+        defineBuiltin(this.root, "array_push");
+        defineBuiltin(this.root, "array_len");
+        defineBuiltin(this.root, "string_concat");
+        defineBuiltin(this.root, "string_len");
+        defineBuiltin(this.root, "println");
+        defineBuiltin(this.root, "exit");
     }
     // ...
 }

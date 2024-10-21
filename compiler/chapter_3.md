@@ -23,7 +23,7 @@ type Stmt = {
 type StmtKind =
     | { type: "error" }
     // ...
-    | { type: "let", ident: string, value: Expr }
+    | { type: "return", expr?: Expr }
     // ...
     ;
 
@@ -62,7 +62,7 @@ class Parser {
     }
     // ...
     private step() { this.currentToken = this.lexer.next() }
-    private done(): bool { return this.currentToken == null; }
+    private done(): boolean { return this.currentToken == null; }
     private current(): Token { return this.currentToken!; }
     // ...
 }
@@ -102,7 +102,7 @@ Also like the lexer, we'll have a `.test()` method in the parser, which will tes
 ```ts
 class Parser {
     // ...
-    private test(type: string): bool {
+    private test(type: string): boolean {
         return !this.done() && this.current().type === type;
     }
     // ...
@@ -189,17 +189,17 @@ class Parser {
     public parseOperand(): Expr {
         // ...
         if (this.test("ident")) {
-            const value = this.current().identValue;
+            const value = this.current().identValue!;
             this.step();
             return this.expr({ type: "ident", value }, pos);
         }
         if (this.test("int")) {
-            const value = this.current().intValue;
+            const value = this.current().intValue!;
             this.step();
             return this.expr({ type: "int", value }, pos);
         }
         if (this.test("string")) {
-            const value = this.current().stringValue;
+            const value = this.current().stringValue!;
             this.step();
             return this.expr({ type: "string", value }, pos);
         }
@@ -327,7 +327,7 @@ class Parser {
                     this.report("expected ident");
                     return this.expr({ type: "error" }, pos);
                 }
-                const value = this.current().identValue;
+                const value = this.current().identValue!;
                 this.step();
                 subject = this.expr({ type: "field", subject, value }, pos);
                 continue;
@@ -715,21 +715,19 @@ class Parser {
             this.report("expected ident");
             return this.stmt({ type: "error" }, pos);
         }
-        const ident = this.current().identValue;
+        const ident = this.current().identValue!;
         this.step();
         if (!this.test("(")) {
             this.report("expected '('");
             return this.stmt({ type: "error" }, pos);
         }
         const params = this.parseFnParams();
-        if (!params.ok)
-            return this.stmt({ type: "error" }, pos);
         if (!this.test("{")) {
             this.report("expected block");
             return this.stmt({ type: "error" }, pos);
         }
         const body = this.parseBlock();
-        return this.stmt({ type: "fn", ident, params: params.value, body }, pos);
+        return this.stmt({ type: "fn", ident, params, body }, pos);
     }
     // ...
 }
@@ -783,7 +781,7 @@ class Parser {
     public parseParam(): { ok: true, value: Param } | { ok: false } {
         const pos = this.pos();
         if (this.test("ident")) {
-            const ident = self.current().value;
+            const ident = this.current().value;
             this.step();
             return { ok: true, value: { ident, pos } };
         }
@@ -966,6 +964,7 @@ class Parser {
     }
     // ...
     private parseSingleLineBlockStmt(): Stmt {
+        const pos = this.pos();
         if (this.test("let"))
             return this.parseLet();
         if (this.test("return"))
@@ -1011,6 +1010,7 @@ class Parser {
     }
     // ...
     private parseMultiLineBlockExpr(): Expr {
+        const pos = this.pos();
         if (this.test("{")) 
             return this.parseBlock();
         if (this.test("if"))
