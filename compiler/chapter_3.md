@@ -678,7 +678,7 @@ class Parser {
 }
 ```
 
-## 3.10 Function definition statement
+## 3.10 Function definition statements
 
 A function definition statement or 'fn'-statement for short is a statement that defines a function with it's name, parameters and body.
 

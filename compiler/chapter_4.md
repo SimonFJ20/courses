@@ -841,7 +841,7 @@ For assigning to fields, eg. `a.b = 5`, we evaluate the inner (field expression)
 
 And then, for assigning to indeces, eg. `a[b] = 5`, we evalute the inner (index expression) subject `a` and index value `b` in that order. If `a` is a struct, we check that `b` is a string and assign to the field, the string names. Else, if `a` is an array, we check that `b` is an int and assign to the index or negative index (see 4.5.5 Index expressions).
 
-## 4.6.5 Let statements
+### 4.6.5 Let statements
 
 A let statement declares and initializes a new symbol.
 
@@ -867,15 +867,113 @@ class Evaluator {
 
 A let statement cannot redeclare a symbol that already exists in the same scope. Therefore we first check if that the symbol does not already exist. Then we evaluate the value and define the symbol.
 
+## 4.6.6 Function definition statements
+
+```ts
+class Evaluator {
+    // ...
+    public evalStmt(stmt: Stmt, syms: Syms): Flow {
+        // ...
+        if (stmt.type === "fn") {
+            if (syms.definedLocally(stmt.ident))
+                throw new Error(`cannot redeclare function "${stmt.ident}"`);
+            const { params, body } = stmt;
+
+            let paramNames: string[] = [];
+            for (const param of params) {
+                if (paramNames.includes(param.ident))
+                    throw new Error(`cannot redeclare parameter "${param.ident}"`);
+                paramNames.push(param.ident);
+            }
+
+            const id = this.fnDefs.length;
+            this.fnDefs.push({ params, body, id });
+            this.syms.define(stmt.ident, { type: "fn", fnDefId: id });
+            return flowValue({ type: "none" });
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+First, like the let statement, we chech that the identifier has not already been declared as a symbel. Then we check that no two parameters have the same name. We then get a function definition id, store the function definition and define a symbol with the function value.
+
+## 4.7 Statements
+
+We'll want a function for evaluating the top-level statements.
+
+```ts
+class Evaluator {
+    // ...
+    public evalStmts(stmts: Stmt[], syms: Syms) {
+        let scopeSyms = new Syms(syms);
+        for (const stmt of block.stmts) {
+            const flow = this.evalStmt(stmt, scopeSyms);
+            if (flow.type !== "value")
+                throw new Error(`${flow.type} on the loose!`);
+        }
+    }
+    // ...
+}
+```
+
+Any break or return flow is at this point an error. We discard any resulting value and the function should not return anything.
+
+## 4.8 Builtin functions
+
+Lastly, we'll define the builtin functions. A builtin function is a function that tells the evaluator to do something, as opposed to a normal function which is simply evaluated. Functions to interact with the outside world, need to be builtins in this evaluator.
+
+First, we'll define the function called `executeBuiltin`, which takes a builtin name, arguments and the relevant symbol table.
+
 ```ts
 class Evaluator {
     // ...
     private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
+        // ...
+        throw new Error(`unknown builtin "${name}"`);
+    }
+    // ...
+}
+```
+
+### 4.8.1 Array and struct constructors
+
+Because we don't have literal syntax for arrays and structs, we need builtins to create a value of each type.
+
+```ts
+class Evaluator {
+    // ...
+    private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
+        // ...
         if (name === "array") {
+            if (args.length !== 0)
+                throw new Error("incorrect arguments");
             return flowValue({ type: "array", values: [] });
-        } else if (name === "struct") {
+        }
+        if (name === "struct") {
+            if (args.length !== 0)
+                throw new Error("incorrect arguments");
             return flowValue({ type: "struct", fields: {} });
-        } else if (name === "push") {
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+No arguments should be given.
+
+### 4.8.2 Array push
+
+To add values to an array, we need a push function.
+
+```ts
+class Evaluator {
+    // ...
+    private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
+        // ...
+        if (name === "push") {
             if (args.length !== 2)
                 throw new Error("incorrect arguments");
             const array = args[0];
@@ -884,7 +982,25 @@ class Evaluator {
                 throw new Error("incorrect arguments");
             array.values.push(value);
             return flowValue({ type: "null" });
-        } else if (name === "println") {
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+This function expects that the first parameter is an array, and the second is the value to push.
+
+### 4.8.3 Println
+
+To print text to the screen, we need a print function. We'll make one called `println` which will also print a newline afterwards.
+
+```ts
+class Evaluator {
+    // ...
+    private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
+        // ...
+        if (name === "println") {
             if (args.length < 1)
                 throw new Error("incorrect arguments");
             let msg = args[0];
@@ -895,18 +1011,75 @@ class Evaluator {
             }
             console.log(msg);
             return flowValue({ type: "null" });
-        } else {
-            throw new Error(`unknown builtin "${name}"`);
         }
+        // ...
     }
+    // ...
+}
+```
+
+This function takes a format-string as the first argument, and, corrosponding to the format-string, values to be formattet in the correct order.
+
+Examples of how to use the function follows.
+
+```
+println("hello world")
+
+let a = "world";
+println("hello {}", a);
+
+println("{} + {} = {}", 1, 2, 1 + 2);
+```
+
+### 4.8.4 Exit
+
+Normally, the evaluator will return a zero-exit code, meanin no error. In case we program should result in an error code, we'll need an exit function.
+
+```ts
+class Evaluator {
+    // ...
+    private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
+        // ...
+        if (name === "exit") {
+            if (args.length !== 1)
+                throw new Error("incorrect arguments");
+            if (args[0].type !== "int")
+                throw new Error("incorrect arguments");
+            const code = args[0].value;
+            // Deno.exit(code)
+            // process.exit(code)
+            throw new Error(`exitted with code ${code}`);
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+### 4.8.5 Define builtins
+
+Finally, we need a way to define the builtin functions in the symbol table.
+
+```ts
+class Evaluator {
     // ...
     public defineBuiltins() {
         this.root.define("array", { type: "builtin_fn", name: "array" });
         this.root.define("struct", { type: "builtin_fn", name: "struct" });
         this.root.define("push", { type: "builtin_fn", name: "struct" });
         this.root.define("println", { type: "builtin_fn", name: "println" });
+        this.root.define("exit", { type: "builtin_fn", name: "exit" });
     }
     // ...
 }
 ```
+
+This function will be called by the consumer before evaluation.
+
+## Exercises
+
+1. Implement an optional feature such that, every time a symbol is defined (let statement or function definition), a record is stored containing the identifier, it's position and the value type. This could be a message printed to the console like `Symbol defined ${ident}: ${value.type} at ${pos.line}:${pos.col}`, eg. `Symbol defined a: int at 5:4`.
+2. Implement a similar optional feature such that, every time a function is called, a record is stored containing function id or name and every argument and their type. This could be a console message like `Function called my_function(value: int, message: string)`;
+3. \* Implement propagating errors (exceptions). For inspiration, look at Lua's `error` and `pcall` functions [here (PIL 8.4)](https://www.lua.org/pil/8.4.html) and [here (PIL 8.5)](https://www.lua.org/pil/8.5.html).
+4. \* Do a performance assessment of the evaluator. Is this fast or slow? Can you explain why this way of executing code may be fast or slow?
 
