@@ -142,7 +142,7 @@ class Syms {
 }
 ```
 
-The `Sym` structure represents a symbol, and contains it's details such as the value and the position where the symbol is declared. The `SymMap` type is a key value map, which maps identifiers to their definition. To keep track of symbols in regard to scopes, we also define a `Syms` class. An instance of `Syms` is a node in a tree structure.
+The `Sym` structure represents a symbol, and contains its details such as the value and the position where the symbol is declared. The `SymMap` type is a key value map, which maps identifiers to their definition. To keep track of symbols in regard to scopes, we also define a `Syms` class. An instance of `Syms` is a node in a tree structure.
 
 We'll define a method for defining symbols.
 
@@ -184,11 +184,11 @@ class Syms {
 }
 ```
 
-If the symbol is defined locally, return the symbol. Else if a the parent node is defined, defer to the parent. Otherwise, return a not-found result.
+If the symbol is defined locally, return the symbol. Else if the parent node is defined, defer to the parent. Otherwise, return a not-found result.
 
 ## 4.3 Control flow
 
-Most code will run with unbroken control flow, but some code will 'break' control flow. This is the case for return statements in functions and break statements in loops. To keep track of, if a return or break statement has been run, we'll define a data structure representing the control flow action of evaluted code.
+Most code will run with unbroken control flow, but some code will 'break' control flow. This is the case for return statements in functions and break statements in loops. To keep track of, if a return or break statement has been run, we'll define a data structure representing the control flow action of evaluated code.
 
 ```ts
 type Flow = {
@@ -204,7 +204,7 @@ The 3 implemented options for control flow is breaking in a loop, returning in a
 For ease of use, we'll add some functions to create the commonly used flow types and values.
 
 ```ts
-function flowWalue(value: Value): Flow {
+function flowValue(value: Value): Flow {
     return { type: "value", value };
 }
 ```
@@ -274,7 +274,7 @@ type FnDef = {
 };
 ```
 
-The parameters are needed, so that we can verify when calling, that we call with the correct amount of arguments. The body is the AST expression to be evaluated. And an identifier, so that we can refer to the definition by it's id `fnDefId`.
+The parameters are needed, so that we can verify when calling, that we call with the correct amount of arguments. The body is the AST expression to be evaluated. And an identifier, so that we can refer to the definition by its id `fnDefId`.
 
 ```ts
 class Evaluator {
@@ -283,7 +283,7 @@ class Evaluator {
 }
 ```
 
-We'll also add an array of function definitions to the evaluator class. The index of a function definition will also be it's id.
+We'll also add an array of function definitions to the evaluator class. The index of a function definition will also be its id.
 
 ## 4.5 Expressions
 
@@ -451,7 +451,7 @@ class Evaluator {
 
 The index operator can be evaluated on a subject of either struct, array or string type. If evaluated on the struct type, we expect a string containing the field name. If the field does not exist, we return a null value. This is in contrast to the field operator, which throws an error, if no field is found. If the subject is instead an array, we expect a value of type int. We check if either the int value index or negative index is in range of the array values. If so, return the value at the index or the negative index. If the subject is a string, evaluation will behave similarly to an array, evaluating to an int value representing the value of the text character at the index or negative index.
 
-The negative index is when a negative int value is passed as index, where the index will start at the end of the array. Given an array `vs` containing the values `["a", "b", "c"]` in listed order, the indices `0`, `1` and `2` will evalute to the values `"a"`, `"b"` and `"c"`, whereas the indices `-1`, `-2`, `-3` will evaluate to the values `"c"`, `"b"` and `"a"`. A negative index implicitly starts at the length of the array and subtracts the absolute index value.
+The negative index is when a negative int value is passed as index, where the index will start at the end of the array. Given an array `vs` containing the values `["a", "b", "c"]` in listed order, the indices `0`, `1` and `2` will evaluate to the values `"a"`, `"b"` and `"c"`, whereas the indices `-1`, `-2`, `-3` will evaluate to the values `"c"`, `"b"` and `"a"`. A negative index implicitly starts at the length of the array and subtracts the absolute index value.
 
 ### 4.5.6 Call expressions
 
@@ -498,11 +498,11 @@ class Evaluator {
 }
 ```
 
-The first thing we do is evaluate the subject expression of the call (`subject(...args)`). If that yeilds a value, we continue. Then we evaluate each of the arguments in order. If evaluation of an argument doesn't yeild a value, we return immediately. Then, if the subject evaluated to a builtin value, we call `executeBuiltin`, which we will define later, with the builtin name, call arguments and symbol sable. Otherwise, we assert that the subject value is a function and that a function definition with the id exists. We then check that the correct amount of arguments are passed. Then, we make a new symbol table with the root table as parent, which will be the called functions symbols. We assign each argument value to the corrosponding parameter name, dictated by argument order. We then evaluate the function body. Finally, we check that the control flow results in either a value, which we simply return, or a return flow, which we convert to a value.
+The first thing we do is evaluate the subject expression of the call (`subject(...args)`). If that yields a value, we continue. Then we evaluate each of the arguments in order. If evaluation of an argument doesn't yield a value, we return immediately. Then, if the subject evaluated to a builtin value, we call `executeBuiltin`, which we will define later, with the builtin name, call arguments and symbol table. Otherwise, we assert that the subject value is a function and that a function definition with the id exists. We then check that the correct amount of arguments are passed. Then, we make a new symbol table with the root table as parent, which will be the called function's symbols. We assign each argument value to the corresponding parameter name, dictated by argument order. We then evaluate the function body. Finally, we check that the control flow results in either a value, which we simply return, or a return flow, which we convert to a value.
 
 ### 4.5.7 Unary expressions
 
-Next, we will implement evaluation of unary expressions, meaning postfix expressions with one operand such as when using the `not` operator.
+Next, we will implement evaluation of unary expressions, meaning postfix expressions with one operand, such as when using the `not` operator.
 
 ```ts
 class Evaluator {
@@ -577,7 +577,7 @@ class Evaluator {
 }
 ```
 
-Add operation (`+`) is straight forward. Evaluate the left expressions, evaluate the right expressions and return a value with the result of adding left and right. Addition should work on integers and strings. Add string two strings results in a new string consisting of the left and right values concatonated.
+Add operation (`+`) is straight forward. Evaluate the left expressions, evaluate the right expressions and return a value with the result of adding left and right. Addition should work on integers and strings. Adding two strings results in a new string consisting of the left and right values concatenated.
 
 The equality operator (`==`) is a bit more complicated. It only results in values of type bool. You should be able to check if any value is null. Otherwise, comparison should only be allowed on two values of same type.
 
@@ -616,7 +616,7 @@ We start by evaluating the condition expression. The condition value should be a
 
 ### 4.5.10 Loop expressions
 
-Next, we'll implement the loop expression. The loop expression will repeatedly evaluate the body expression while throwing away the resulting values, until it results in breaking control flow. If the control flow is of type break, the loop expression itself will evalute to the break's value.
+Next, we'll implement the loop expression. The loop expression will repeatedly evaluate the body expression while throwing away the resulting values, until it results in breaking control flow. If the control flow is of type break, the loop expression itself will evaluate to the break's value.
 
 ```ts
 class Evaluator {
@@ -638,7 +638,7 @@ class Evaluator {
 }
 ```
 
-First, start an infinite loop. In each iteration, evalute the loop body. If the resulting control flow is breaking, return the break value. If the control flow is not a value, meaning return or other unimplemented control flow, just return the control flow. Otherwise, discard the value and repeate.
+First, start an infinite loop. In each iteration, evaluate the loop body. If the resulting control flow is breaking, return the break value. If the control flow is not a value, meaning return or other unimplemented control flow, just return the control flow. Otherwise, discard the value and repeate.
 
 
 ## 4.5.11 Block expressions
@@ -839,7 +839,7 @@ For assigning to identifiers, eg. `a = 5`, we start by finding the symbol. If no
 
 For assigning to fields, eg. `a.b = 5`, we evaluate the inner (field expression) subject expression, `a` in this case. Then we reassign the field value or assign to a new field, if it doesn't exist.
 
-And then, for assigning to indeces, eg. `a[b] = 5`, we evalute the inner (index expression) subject `a` and index value `b` in that order. If `a` is a struct, we check that `b` is a string and assign to the field, the string names. Else, if `a` is an array, we check that `b` is an int and assign to the index or negative index (see 4.5.5 Index expressions).
+And then, for assigning to indices, eg. `a[b] = 5`, we evaluate the inner (index expression) subject `a` and index value `b` in that order. If `a` is a struct, we check that `b` is a string and assign to the field, the string names. Else, if `a` is an array, we check that `b` is an int and assign to the index or negative index (see 4.5.5 Index expressions).
 
 ### 4.6.5 Let statements
 
@@ -1080,7 +1080,7 @@ class Evaluator {
 }
 ```
 
-This function takes a format-string as the first argument, and, corrosponding to the format-string, values to be formattet in the correct order.
+This function takes a format-string as the first argument, and, corresponding to the format-string, values to be formatted in the correct order.
 
 Examples of how to use the function follows.
 
@@ -1095,7 +1095,7 @@ println("{} + {} = {}", 1, 2, 1 + 2);
 
 ### 4.8.5 Exit
 
-Normally, the evaluator will return a zero-exit code, meanin no error. In case we program should result in an error code, we'll need an exit function.
+Normally, the evaluator will return a zero-exit code, meaning no error. In case the program should result in an error code, we'll need an exit function.
 
 ```ts
 class Evaluator {
