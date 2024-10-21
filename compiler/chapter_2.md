@@ -68,7 +68,7 @@ I'll add 3 functions for iterating through characters of the text:
 class Lexer {
     // ...
     private step() { /*...*/ }
-    private done(): bool { return this.index >= this.text.length; }
+    private done(): boolean { return this.index >= this.text.length; }
     private current(): string { return this.text[this.index]; }
     // ...
 }
@@ -127,11 +127,8 @@ And a method for creating valueless tokens:
 class Lexer {
     // ...
     private token(type: string, pos: Pos): Token {
-        return {
-            index: this.index,
-            line: this.line,
-            col: this.col,
-        };
+        const length = this.index - pos.index;
+        return { type, pos, length };
     }
     // ...
 }
@@ -142,11 +139,11 @@ And a method for testing/matching the `.current()` against a regex pattern or st
 ```ts
 class Lexer {
     // ...
-    private test(pattern: RegExp | string): Token {
+    private test(pattern: RegExp | string): boolean {
         if (typeof pattern === "string")
-            return this.current === pattern;
+            return this.current() === pattern;
         else
-            return pattern.test(this.current);
+            return pattern.test(this.current());
     }
     // ...
 }
@@ -164,7 +161,7 @@ class Lexer {
         // ...
         console.error(`Lexer: illegal character '${this.current()}' at ${pos.line}:${pos.col}`);
         this.step();
-        return next();
+        return this.next();
     }
     // ...
 }
@@ -182,21 +179,13 @@ We don't need to know anything about whitespace, so we'll skip over it without m
 class Lexer {
     // ...
     public next(): Token | null {
-        if (this.done())
-            return null;
-        const pos = this.pos();
+        // ...
         if (this.test(/[ \t\n]/)) {
             while (!this.done() && this.test(/[ \t\n]/))
                 this.step();
-            return next();
+            return this.next();
         }
         // ...
-        console.error(
-            `Lexer: illegal character '${this.current()}'`
-                + ` at ${pos.line}:${pos.col}`,
-        );
-        this.step();
-        return next();
     }
     // ...
 }
@@ -216,7 +205,7 @@ class Lexer {
         if (this.test("#")) {
             while (!this.done() && !this.test("\n"))
                 this.step();
-            return next();
+            return this.next();
         }
         // ...
     }
@@ -408,7 +397,8 @@ const text = `
 const lexer = new Lexer(text);
 let token = lexer.next();
 while (token !== null) {
-    console.log(`Lexed ${token}`);
+    const value = token.identValue ?? token.intValue ?? token.stringValue ?? "";
+    console.log(`Lexed ${token}(${value})`);
     token = lexer.next();
 }
 ```
