@@ -1,7 +1,7 @@
 
 # 3 Parser
 
-In this chaper I'll show how I would make a parser.
+In this chapter I'll show how I would make a parser.
 
 A parser, in addition to our lexer, transforms the input program as text, meaning an unstructured sequence of characters, into a structered representation. Structured meaning the representation tells us about the different constructs such as if statements and expressions.
 
@@ -9,7 +9,7 @@ A parser, in addition to our lexer, transforms the input program as text, meanin
 
 The result of parsing is a tree structure representing the input program.
 
-This structure is a recursive acyclic structure storing the different parts of the program.
+This structure is a recursive structure storing the different parts of the program.
 
 This is how I would define an AST data type.
 
@@ -95,7 +95,7 @@ class Parser {
 }
 ```
 
-The parser does not need to keep track of `index`, `line` and `col` as those are stored in the tokens. The token's position is prefered to the lexer's.
+The parser does not need to keep track of `index`, `line` and `col` as those are stored in the tokens. The token's position is preferred to the lexer's.
 
 Also like the lexer, we'll have a `.test()` method in the parser, which will test for token type rather than strings or regex.
 
@@ -151,7 +151,7 @@ class Parser {
 
 ## 3.3 Operands
 
-Operands are the individual parts of an operation. For example, in the math expression `a + b`, (would be `+ a b` in the input language), `a` and `b` are the *operands*, while `+` is the *operator*. In the expression `a + b * c`, the operands are `a`, `b` and `c`. But in the expression `a * (b + c)`, the operands of the multiply operation are `a` and `(b + c)`. `(b + c)` is an operands, because it is enclosed on both sides. This is how we'll define operands.
+Operands are the individual parts of an operation. For example, in the math expression `a + b`, (would be `+ a b` in the input language), `a` and `b` are the *operands*, while `+` is the *operator*. In the expression `a + b * c`, the operands are `a`, `b` and `c`. But in the expression `a * (b + c)`, the operands of the multiply operation are `a` and `(b + c)`. `(b + c)` is a singular operand, because it is enclosed on both sides. This is how we'll define operands.
 
 We'll make a public method in `Parser` called `parseOperand`.
 
@@ -431,10 +431,10 @@ class Parser {
 }
 ```
 
-Similarly to index epxressions, if we find a `(`-token, we step over it, parse the arguments, check for a `)` and replace `subject` with a call expression containing the previous `subject`.
+Similarly to index expressions, if we find a `(`-token, we step over it, parse the arguments, check for a `)` and replace `subject` with a call expression containing the previous `subject`.
 
 When parsing the arguments, we start by testing if we've reached a `)` to check if there are any arguments. If not, we parse the first argument. 
-The consecutive arguments are all preceded by a `,`-token. There we test or `,`, to check if we should keep parsing arguments. After checking for a seperating `,`, we check if we've reached a `)` and break if so. This is to allow for trailing comma.
+The consecutive arguments are all preceded by a `,`-token. There we test for `,`, to check if we should keep parsing arguments. After checking for a seperating `,`, we check if we've reached a `)` and break if so. This is to allow for trailing comma.
 
 ```ts
 func(
@@ -445,7 +445,7 @@ func(
 
 ## 3.5 Prefix expressions
 
-Contrasting postfix expressions, prefix expression are operations where the operator comes first, then the operands are listed. In some languages, operations such as negation (eg. `-value`) and not-operations (eg. `!value`) are prefix operations. In the language we're making, all binary and unary arithmetic operations are prefix. This includes both expressions with a single operand, such as not (eg. `not value`), but also expressions with 2 operands, such ass addition (eg. `+ a b`) and equation (eg. `== a b`).
+Contrasting postfix expressions, prefix expression are operations where the operator comes first, then the operands are listed. In some languages, operations such as negation (eg. `-value`) and not-operations (eg. `!value`) are prefix operations. In the language we're making, all binary and unary arithmetic operations are prefix. This includes both expressions with a single operand, such as not (eg. `not value`), but also expressions with 2 operands, such as addition (eg. `+ a b`) and equation (eg. `== a b`).
 
 This is because infix operators (eg. `a + b`) makes parsing more complicated, as it requires reasoning about operator precedence, eg. why `2 + 3 * 4 != (2 + 3) * 4`.
 
@@ -735,7 +735,7 @@ class Parser {
 }
 ```
 
-We first step over the initial `fn`-token. Then we grap the value of an `ident`-token. Then we check for a `(` and call `.parseFnParams()` to parse the parameters, including the encapsulating `(` and `)`. Then we check for and parse a block. And then we return the statement.
+We first step over the initial `fn`-token. Then we grab the value of an `ident`-token. Then we check for a `(` and call `.parseFnParams()` to parse the parameters, including the encapsulating `(` and `)`. Then we check for and parse a block. And then we return the statement.
 
 Then we define the `.parseFnParams()` method.
 
@@ -830,7 +830,7 @@ class Parser {
 }
 ```
 
-We step over the first `let`-token. Then we parse a parameter using the `.parseParam()` method. If it fails, we return an error statement. Then we check for and step over a `=`-token. We then parse an expressions. And lastly return a let statement with the `ident` and `value`.
+We step over the first `let`-token. Then we parse a parameter using the `.parseParam()` method. If it fails, we return an error statement. Then we check for and step over a `=`-token. We then parse an expression. And lastly return a let statement with the `ident` and `value`.
 
 ## 3.14 Assignment and expression statements
 
@@ -1118,7 +1118,7 @@ class Parser {
 }
 ```
 
-Then we test, if we've reached a single line statement, meaning it should end with a `;`, ishc as let, return and break.
+Then we test, if we've reached a single line statement, meaning it should end with a `;`, such as let, return and break.
 
 ```ts
 class Parser {
@@ -1162,7 +1162,7 @@ class Parser {
 
 If none of the above, we parse an assignment statement, which will parse an assignment statement or an expression statement.
 
-## 3 Exercises
+## Exercises
 
 1. Implement boolean literals: `true` and `false` and null literal: `null`.
 2. Implement the binary operators: `-`, `*`, `/`, `!=`, `<`, `>`, `<=`, `>=`, `or` and `and`.
