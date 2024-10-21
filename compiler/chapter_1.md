@@ -266,8 +266,8 @@ The implemented parser goes through each token and checks the structure of the p
 #### Exercises
 
 1. Implement subtraction and division.
-3. \* Add position (line and column number) to each expression.
-5. \*\* Rewrite parser, to use infix notation (`1 + 2 * 3`) instead of prefix/polish notation (`+ 1 * 2 3`).
+2. \* Add position (line and column number) to each expression.
+3. \*\* Rewrite parser, to use infix notation (`1 + 2 * 3`) instead of prefix/polish notation (`+ 1 * 2 3`).
 
 ## 1.5 Putting it together
 

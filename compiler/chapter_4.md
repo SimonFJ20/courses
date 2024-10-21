@@ -973,7 +973,7 @@ class Evaluator {
     // ...
     private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
         // ...
-        if (name === "push") {
+        if (name === "array_push") {
             if (args.length !== 2)
                 throw new Error("incorrect arguments");
             const array = args[0];
@@ -991,7 +991,69 @@ class Evaluator {
 
 This function expects that the first parameter is an array, and the second is the value to push.
 
-### 4.8.3 Println
+### 4.8.3 Array length
+
+
+We'll also need a way to get the length of an array.
+
+```ts
+class Evaluator {
+    // ...
+    private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
+        // ...
+        if (name === "array_len") {
+            if (args.length !== 1)
+                throw new Error("incorrect arguments");
+            const array = args[0];
+            if (array.type !== "array")
+                throw new Error("incorrect arguments");
+            return flowValue({ type: "int", value: array.values.length });
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+### 4.8.3 String functions
+
+Like arrays, we need push and length functions for strings too.
+
+```ts
+class Evaluator {
+    // ...
+    private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
+        // ...
+        if (name === "string_concat") {
+            if (args.length !== 2)
+                throw new Error("incorrect arguments");
+            if (args[0].type === "string") {
+                if (args[1].type === "string")
+                    return flowValue({ type: "string", value: args[0].value + args[1].value });
+                if (args[1].type === "int")
+                    return flowValue({ type: "string", value: args[0].value + String.fromCharCode(args[1].value) });
+            }
+            if (args[0].type === "int" && args[1].type === "string") {
+                return flowValue({ type: "string", value: String.fromCharCode(args[0].value) + args[1].value });
+            }
+            throw new Error("incorrect arguments");
+        }
+        if (name === "string_len") {
+            if (args.length !== 1)
+                throw new Error("incorrect arguments");
+            if (args[0].type !== "string")
+                throw new Error("incorrect arguments");
+            return flowValue({ type: "int", value: args[0].value.length });
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+The function `string_concant` takes either two strings or a string and a character (int). A new string is returning containing both values concatonated.
+
+### 4.8.4 Println
 
 To print text to the screen, we need a print function. We'll make one called `println` which will also print a newline afterwards.
 
@@ -1031,7 +1093,7 @@ println("hello {}", a);
 println("{} + {} = {}", 1, 2, 1 + 2);
 ```
 
-### 4.8.4 Exit
+### 4.8.5 Exit
 
 Normally, the evaluator will return a zero-exit code, meanin no error. In case we program should result in an error code, we'll need an exit function.
 
@@ -1056,7 +1118,52 @@ class Evaluator {
 }
 ```
 
-### 4.8.5 Define builtins
+### 4.8.6 Convert values to strings
+
+This function will return a string representation of any value.
+
+```ts
+class Evaluator {
+    // ...
+    private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
+        // ...
+        if (name === "to_string") {
+            if (args.length !== 1)
+                throw new Error("incorrect arguments");
+            return flowValue({ type: "string", value: valueToString(args[0]) });
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+### 4.8.7 Convert strings to integers
+
+This function will try to convert a string into an integer.
+
+```ts
+class Evaluator {
+    // ...
+    private executeBuiltin(name: string, args: Value[], syms: Syms): Flow {
+        // ...
+        if (name === "string_to_int") {
+            if (args.length !== 1 || args[0].type !== "string")
+                throw new Error("incorrect arguments");
+            const value = parseInt(args[0].value);
+            if (value === NaN)
+                return flowValue({ type: "null" });
+            return flowValue({ type: "int", value });
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+The function will return a null value, in case conversion fails.
+
+## 4.9 Define builtins
 
 Finally, we need a way to define the builtin functions in the symbol table.
 
@@ -1066,7 +1173,10 @@ class Evaluator {
     public defineBuiltins() {
         this.root.define("array", { type: "builtin_fn", name: "array" });
         this.root.define("struct", { type: "builtin_fn", name: "struct" });
-        this.root.define("push", { type: "builtin_fn", name: "struct" });
+        this.root.define("array_push", { type: "builtin_fn", name: "array_push" });
+        this.root.define("array_len", { type: "builtin_fn", name: "array_len" });
+        this.root.define("string_concat", { type: "builtin_fn", name: "string_concat" });
+        this.root.define("string_len", { type: "builtin_fn", name: "string_len" });
         this.root.define("println", { type: "builtin_fn", name: "println" });
         this.root.define("exit", { type: "builtin_fn", name: "exit" });
     }

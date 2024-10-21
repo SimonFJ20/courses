@@ -564,6 +564,10 @@ class Parser {
             return this.expr({ type: "if", cond, truthy }, pos);
         }
         this.step();
+        if (this.test("if")) {
+            const falsy = this.parseIf();
+            return this.expr({ type: "if", cond, truthy, falsy }, pos);
+        }
         if (!this.test("{")) {
             this.report("expected block");
             return this.expr({ type: "error" }, pos);
@@ -577,7 +581,7 @@ class Parser {
 
 When parsing an if-expression, we assume we already have reached an `if`-token.
 
-We skip the `if`-token. Then we parse the condition expression `cond`. Then we check for a `{`-token and parse block. Then we check for an `else`-token. If not present, we return an if-expression with no `falsy`-option. Else we skip the `else`-token, check for and parse the `falsy`-block, and return the if-expression with the `falsy`-option.
+We skip the `if`-token. Then we parse the condition expression `cond`. Then we check for a `{`-token and parse block. Then we check for an `else`-token. If not present, we return an if-expression with no `falsy`-option. Else we skip the `else`-token. If we find a `if`-token, it means we're parsing an else-if construct, in which case we parse an if expression recursively. Else check for and parse the `falsy`-block. And then return the if-expression with the `falsy`-option.
 
 ## 3.8 Loop expressions
 
