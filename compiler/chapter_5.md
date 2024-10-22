@@ -77,15 +77,15 @@ Exactly like in chapter 1, we need a function for evaluating the expression stru
 
 ```rs
 fn eval_expr(node) {
-    if (node.type == "int") {
+    if == node.type "int" {
         return node.value;
     }
-    if (node.type == "add") {
+    if == node.type "add" {
         let left = eval_expr(node.left);
         let right = eval_expr(node.right);
         return + left right;
     }
-    if (node.type == "multiply") {
+    if == node.type "multiply" {
         let left = eval_expr(node.left);
         let right = eval_expr(node.right);
         return * left right;
@@ -150,12 +150,12 @@ fn lex(text) {
         } else if == text[i] "+"[0] {
             i = + i 1;
             let token = struct();
-            token["type"] = "+"[0];
+            token["type"] = "+";
             array_push(token);
         } else if == text[i] "*"[0] {
             i = + i 1;
             let token = struct();
-            token["type"] = "*"[0];
+            token["type"] = "*";
             array_push(token);
         } else {
             println("illegal character");

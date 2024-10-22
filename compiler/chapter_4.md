@@ -290,7 +290,7 @@ Let's make a function `evalExpr` for evaluating expressions.
 ```ts
 class Evaluator {
     // ...
-    public evalExpr(expr: Expr, syms: Expr): Flow {
+    public evalExpr(expr: Expr, syms: Syms): Flow {
         if (expr.kind.type === "error") {
             throw new Error("error in AST");
         }
@@ -785,7 +785,7 @@ class Evaluator {
                 sym.value = value;
                 return flowValue({ type: "null" });
             }
-            if (stmt.kind.subject.type === "field") {
+            if (stmt.kind.subject.kind.type === "field") {
                 const [subject, subjectFlow] = expectValue(this.evalExpr(stmt.kind.subject.kind.subject, syms));
                 if (!subject)
                     return subjectFlow;
@@ -906,8 +906,8 @@ We'll want a function for evaluating the top-level statements.
 ```ts
 class Evaluator {
     // ...
-    public evalStmts(stmts: Stmt[], syms: Syms) {
-        let scopeSyms = new Syms(syms);
+    public evalStmts(stmts: Stmt[]) {
+        let scopeSyms = new Syms(this.root);
         for (const stmt of stmts) {
             const flow = this.evalStmt(stmt, scopeSyms);
             if (flow.type !== "value")

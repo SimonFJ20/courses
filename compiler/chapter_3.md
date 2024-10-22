@@ -365,7 +365,7 @@ class Parser {
             if (this.test("[")) {
                 this.step();
                 const value = this.parseExpr();
-                if (!this.test("]") {
+                if (!this.test("]")) {
                     this.report("expected ']'");
                     return this.expr({ type: "error" }, pos);
                 }
@@ -405,7 +405,7 @@ class Parser {
             if (this.test("(")) {
                 this.step();
                 let args: Expr[] = [];
-                if (!this.test(")") {
+                if (!this.test(")")) {
                     args.push(this.parseExpr());
                     while (this.test(",")) {
                         this.step();
@@ -414,7 +414,6 @@ class Parser {
                         args.push(this.parseExpr());
                     }
                 }
-                const value = this.parseExpr();
                 if (!this.test(")") {
                     this.report("expected ')'");
                     return this.expr({ type: "error" }, pos);
@@ -642,7 +641,7 @@ class Parser {
     public parseBreak(): Stmt {
         const pos = this.pos();
         this.step();
-        if (!this.test(";")) {
+        if (this.test(";")) {
             return this.stmt({ type: "break" }, pos);
         }
         const expr = this.parseExpr();
@@ -672,7 +671,7 @@ class Parser {
     public parseReturn(): Stmt {
         const pos = this.pos();
         this.step();
-        if (!this.test(";")) {
+        if (this.test(";")) {
             return this.stmt({ type: "return" }, pos);
         }
         const expr = this.parseExpr();
@@ -781,7 +780,7 @@ class Parser {
     public parseParam(): { ok: true, value: Param } | { ok: false } {
         const pos = this.pos();
         if (this.test("ident")) {
-            const ident = this.current().value;
+            const ident = this.current().identValue!;
             this.step();
             return { ok: true, value: { ident, pos } };
         }
@@ -913,6 +912,7 @@ class Parser {
         // ...
         while (!this.done()) {
             if (this.test("}")) {
+                this.step();
                 return this.expr({ type: "block", stmts }, pos);
             // ...
             }
@@ -1042,8 +1042,10 @@ class Parser {
                     this.eatSemicolon();
                     stmts.push(this.stmt({ type: "assign", subject: expr, value }, pos));
                 } else if (this.test(";")) {
+                    this.step();
                     stmts.push(this.stmt({ type: "expr", expr }, expr.pos));
                 } else if (this.test("}")) {
+                    this.step();
                     return this.expr({ type: "block", stmts, expr }, pos);
                 } else {
                     this.report("expected ';' or '}'");
@@ -1129,7 +1131,7 @@ class Parser {
             if (this.test("fn")) {
             // ...
             } else if (this.test("{") || this.test("if") || this.test("loop")) {
-                let expr = this.parseMultiLineBlockExpr();
+                const expr = this.parseMultiLineBlockExpr();
                 stmts.push(this.stmt({ type: "expr", expr }, expr.pos));
             // ...
             }
@@ -1152,6 +1154,7 @@ class Parser {
             // ...
             } else  {
                 stmts.push(this.parseAssign());
+                this.eatSemicolon();
             }
         }
         return stmts;
