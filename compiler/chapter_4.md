@@ -269,10 +269,11 @@ type FnDef = {
     params: Param[],
     body: Expr,
     id: number,
+    syms: Syms,
 };
 ```
 
-The parameters are needed, so that we can verify when calling, that we call with the correct amount of arguments. The body is the AST expression to be evaluated. And an identifier, so that we can refer to the definition by its id `fnDefId`.
+The parameters are needed, so that we can verify when calling, that we call with the correct amount of arguments. The body is the AST expression to be evaluated. An identifier so that we can refer to the definition by its id `fnDefId`. And a symbol table, at the time and place of the definition, as opposed to the callers time and place.
 
 ```ts
 class Evaluator {
@@ -479,7 +480,7 @@ class Evaluator {
             const fnDef = this.fnDefs[subject.fnDefId];
             if (fnDef.params.length !== args.length)
                 throw new Error("incorrect amount of arguments in call to function");
-            let fnScopeSyms = new Syms(this.root);
+            let fnScopeSyms = new Syms(fnDef.syms);
             for (const [i, param] of fnDef.params.entries()) {
                 fnScopeSyms.define(param.ident, { value: args[i], pos: param.pos });
             }
@@ -496,7 +497,7 @@ class Evaluator {
 }
 ```
 
-The first thing we do is evaluate the subject expression of the call (`subject(...args)`). If that yields a value, we continue. Then we evaluate each of the arguments in order. If evaluation of an argument doesn't yield a value, we return immediately. Then, if the subject evaluated to a builtin value, we call `executeBuiltin`, which we will define later, with the builtin name, call arguments and symbol table. Otherwise, we assert that the subject value is a function and that a function definition with the id exists. We then check that the correct amount of arguments are passed. Then, we make a new symbol table with the root table as parent, which will be the called function's symbols. We assign each argument value to the corresponding parameter name, dictated by argument order. We then evaluate the function body. Finally, we check that the control flow results in either a value, which we simply return, or a return flow, which we convert to a value.
+The first thing we do is evaluate the subject expression of the call (`subject(...args)`). If that yields a value, we continue. Then we evaluate each of the arguments in order. If evaluation of an argument doesn't yield a value, we return immediately. Then, if the subject evaluated to a builtin value, we call `executeBuiltin`, which we will define later, with the builtin name, call arguments and symbol table. Otherwise, we assert that the subject value is a function and that a function definition with the id exists. We then check that the correct amount of arguments are passed. Then, we make a new symbol table with the function definition's symbol table as parent, which will be the called function's symbols. We assign each argument value to the corresponding parameter name, dictated by argument order. We then evaluate the function body. Finally, we check that the control flow results in either a value, which we simply return, or a return flow, which we convert to a value.
 
 ### 4.5.7 Unary expressions
 
@@ -887,7 +888,7 @@ class Evaluator {
             }
 
             const id = this.fnDefs.length;
-            this.fnDefs.push({ params, body, id });
+            this.fnDefs.push({ params, body, id, syms });
             syms.define(stmt.kind.ident, { value: { type: "fn", fnDefId: id }, pos: stmt.pos });
             return flowValue({ type: "null" });
         }
@@ -1069,7 +1070,7 @@ class Evaluator {
             for (const arg of args.slice(1)) {
                 if (!msg.includes("{}"))
                     throw new Error("incorrect arguments");
-                msg.replace("{}", valueToString(arg));
+                msg = msg.replace("{}", valueToString(arg));
             }
             console.log(msg);
             return flowValue({ type: "null" });
@@ -1183,6 +1184,8 @@ class Evaluator {
         defineBuiltin(this.root, "string_len");
         defineBuiltin(this.root, "println");
         defineBuiltin(this.root, "exit");
+        defineBuiltin(this.root, "to_string");
+        defineBuiltin(this.root, "string_to_int");
     }
     // ...
 }

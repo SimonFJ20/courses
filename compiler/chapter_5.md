@@ -189,7 +189,7 @@ fn parser_parse_expr(self) {
     if parser_done(self) {
         println("expected expr, got end-of-file");
         exit(1);
-    } else if == parser_current(self) "+" {
+    } else if == parser_current(self).type "+" {
         parser_step(self);
         let left = parser_parse_expr(self);
         let right = parser_parse_expr(self);
@@ -198,7 +198,7 @@ fn parser_parse_expr(self) {
         node["left"] = left;
         node["right"] = right;
         node
-    } else if == parser_current(self) "*" {
+    } else if == parser_current(self).type "*" {
         parser_step(self);
         let left = parser_parse_expr(self);
         let right = parser_parse_expr(self);
@@ -207,9 +207,10 @@ fn parser_parse_expr(self) {
         node["left"] = left;
         node["right"] = right;
         node
-    } else if == parser_current(self) "int" {
-        let value = this.current().value;
+    } else if == parser_current(self).type "int" {
+        let value = parser_current(self).value;
         parser_step(self);
+        let node = struct();
         node["type"] = "int";
         node["value"] = value;
         node
