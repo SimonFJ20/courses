@@ -170,18 +170,24 @@ Using some if-statement and loops, this implementation goes through each `i` cha
 A visualization of how this code would lex the expression `+ 12 34` could look like this:
 
 ```
-text    i   state           tokens
+text        i   state           tokens
 
-+ 12    0   make Plus       []
++ 12 34     0   make Plus       []
 ^
-+ 12    1   skip whitespace [Plus]
++ 12 34     1   skip whitespace [Plus]
  ^
-+ 12    2   make Int        [Plus]
++ 12 34     2   make Int        [Plus]
   ^
-+ 12    3   make Int        [Plus]
++ 12 34     3   make Int        [Plus]
    ^
-+ 12    4   done            [Plus Int(12)]
++ 12 34     4   skip whitespace [Plus Int(12)]
     ^
++ 12 34     5   make Int        [Plus Int(12)]
+     ^
++ 12 34     6   make Int        [Plus Int(12)]
+      ^
++ 12 34     7   done            [Plus Int(12) Int(34)]
+       ^
 ```
 
 #### Exercises
