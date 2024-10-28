@@ -53,46 +53,73 @@ We'll start out with the same `SymMap` type and `Syms` class as chapter 4.
 
 ## 7.3 Symbols in AST
 
-We don't just need to check that every symbol is defined, we also need to be able to get the definition of each symbol, whenever we need it. In that sense we need to store the symbol maps in a convenient manner in relation to the usage of the symbols in the AST. We'll therefore store the symbol maps in the AST.
+We don't just need to check that every symbol is defined, we also need to be able to get the definition of each symbol, whenever we need it. We'll do this, by replacing all identifiers, *identifying a symbol*, by the symbol itself.
 
-### 7.3.1 lock expression symbols
-
-Each block expression introduces a new scope, meaning a new child symbol table. It's therefore natural to store the child symbol table alongside the expression.
-
-We'll therefore add a field to the block expression.
+To that end, we'll add symbol as an expression in the AST.
 
 ```ts
 type ExprKind =
     // ...
     | {
-        type: "block",
-        stmts: Stmt[],
-        expr?: Expr,
-        syms?: Syms,
+        type: "sym",
+        ident: string,
+        defType: "let" | "fn" | "fn_param" | "builtin",
+        stmt?: Stmt,
+        param?: Param,
     }
     // ...
     ;
 ```
 
-The field is optional so that the parser don't have to set it, but we can set it later.
+The estute reader will have recognized that the fields `stmt` and `param` may refer back to a related node in the structure, which implies that the structure is cyclic. We therefore no longer have a tree (directed aclyclic graph), but instead a graph. This will have no real consequences, only theoritical implications. I will still refer to the structure as the AST.
 
-### 7.3.2 Function definitions symbols
+## 7.4 The resolver class
 
-Function definitions also include a symbol table. This is because the defined body expressions need the symbols defined at the function's definition time, as opposed to at time of calling.
-
+We'll make a resolver class, which, just like the evaluat in chapter 4, has a root symbol table.
 
 ```ts
-type StmtKind =
+class Resolver {
+    private root = new Syms();
     // ...
-    | {
-        type: "fn",
-        ident: string,
-        params: Param[],
-        body: Expr,
-        syms?: Syms,
+}
+```
+
+## 7.5 Resolving identifiers
+
+We'll start by defining a way to resolve identifiers.
+
+```ts
+class Resolver {
+    // ...
+    private resolveIdentExpr(expr: Expr, syms: Syms): { ok: boolean } {
+        if (expr.type !== "ident")
+            throw new Error("expected ident");
+        const ident = expr.kind.ident;
+        const { sym, ok: symFound } = syms.get(ident);
+        if (!symFound) {
+            this.reportUseOfUndefined(ident, expr.pos, syms);
+            return { ok: false };
+        }
+        expr.kind = {
+            type: "sym",
+            ident,
+            defType: sym.type,
+        };
+        if (sym.stmt)
+            expr.kind.stmt = sym.stmt;
+        if (sym.param)
+            expr.kind.param = sym.param;
+        return { ok: true };
     }
     // ...
-    ;
+}
 ```
+
+When resolving an identifier, we essentially convert the identifier expression in-AST into a symbol expression. Therefore we need to take the expression, so we can mutate it. Because the `Expr` type is unspecific, we have to assert we've gotten an identifer.
+
+Then we try and find the symbol in the symbol table, and if we don't, we report and error and return a non-ok result.
+
+And then we do the mutation, ie. converting the identifier expression into a symbol expression. We have to check that `sym.stmt` and `sym.param` are present, before we assign them.
+
 
 
