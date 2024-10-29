@@ -60,5 +60,19 @@ The component executing the program is called a virtual machine, VM for short, w
 
 The design decisions of a virtual machine, ie. how it runs and how the program should be, is called the architecture.
 
+When running a program, we often need features which operate *outside of* the program. An example is the builtin functions in chapter 4. These functionalities are called the *runtime*. The runtime is typically implemented to a certian degree in the virtual machine. In that sense the VM also functions as an interface between the program and the host computer.
 
+## 6.5 Types
+
+All values in a program, are of certain types (value types). The type determines how the value is handled, eg. `+` operator on two integers is addition, while the same operator on two strings is concatenation. Types in a program are either known in advance *at compiletime* or is first known when the program runs *at runtime*. The evaluator implemented in chapter 4 would figure out the types as the evaluation went along, this was an example of determining types at runtime, also called *dynamic typing*. When all types are determined in compiletime, this is called *static typing*. The language implemented thus far offer the programmer no way of explicitly specifying types for variables or functions.
+
+There are three important factors in the decision of using either *static* or *dynamic* typing.
+
+The first is language design and developer experience. Types may both help the programmer in writing clear and correct programs, but may also hinder them, because the amount of work to be done is larger, when everything requires a determined type.
+
+The second factor pertains to target, runtime and performance. A program can only be compiled down to and run at a certain level without types being determined. With types predetermined, we can determine the size of values and which operations to execute, without we need to run the program to figure these things out. The lower we can compile a program before execution, the less the theoretical overhead. The higher level the program is at runtime, the bigger the *runtime* need to be theoretically.
+
+The third factor is about effort. Static types require more tooling, eg. parsing types and type checking.
+
+We could also delve into type annotations in dynamically typed languages and runtime compilation and optimizations in JIT compilers to explain languages like Typescript, but that's beyond this course.
 
