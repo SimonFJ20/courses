@@ -11,8 +11,29 @@ For a type checker to be able to determine all the types of all values, the prog
 
 We'll need explicit typing for the following types: null, int, string, bool, array, struct and function.
 
+We want to be able to specify types in let-statements and fn-statements, like the following.
+
+```rs
+let a: int = 5;
+
+fn add(a: int, b: int) -> int { /*...*/ }
 ```
+
+For array and function types, we also want to specify details like contained type, return type and parameter types, like the following.
+
+```rs
+let op: fn(int, int) -> int = add;
+
+let values: [int] = array();
 ```
+
+
+
+### Parsing parameters
+
+Both function definitions and let-statements use parameters.
+
+### Parsing functions
 
 ## Types in AST
 

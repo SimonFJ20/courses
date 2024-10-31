@@ -405,7 +405,7 @@ while (token !== null) {
 
 ## Exercises
 
-1. Implement the operators: `-`, `*`, `/`, `(`, `)`, `.`, `,`, `;`, `[`, `]`, `!=`, `<`, `>`, `<=` and `>=`.
+1. Implement the operators: `-`, `*`, `/`, `(`, `)`, `.`, `,`, `:`, `;`, `[`, `]`, `!=`, `<`, `>`, `<=`, `>=` and `->`.
 2. Implement the keywords: `true`, `false`, `null`, `or`, `and`, `not`, `loop`, `break`, `let`, `fn` and `return`.
 3. \* Implement single line comments using `//` and multiline comments using `\*` and `*\` (\*\* extra points if multiline comments can be nested, eg. `/* ... /* ... */ ... */`).
 4. \* Reimplement integers such that integers are either `0` or start with `[1-9]`.
