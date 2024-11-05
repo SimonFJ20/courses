@@ -126,7 +126,7 @@ class Resolver {
             return;
         }
         if (expr.kind.type === "ident") {
-            this.resolveIdentexpr(expr, syms);
+            this.resolveIdentExpr(expr, syms);
             return;
         }
         // ...

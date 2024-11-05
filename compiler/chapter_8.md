@@ -211,13 +211,19 @@ When checking the types, we need to store the resulting value types. We'll choos
 ```ts
 type Expr = {
     // ...
-    valueType: ValueType,
+    vtype?: ValueType,
 }
 ```
 ```ts
 type Stmt = {
     // ...
-    valueType: ValueType,
+    vtype?: ValueType,
+}
+```
+```ts
+type Param = {
+    // ...
+    vtype?: ValueType,
 }
 ```
 
@@ -312,6 +318,9 @@ class Checker {
     // ...
     public checkExpr(expr: Expr): VType {
         const pos = expr.pos;
+        if (expr.kind.type === "error") {
+            throw new Error("error in AST");
+        }
         // ...
         throw new Error(`unknown expression ${expr.type}`);
     }
@@ -319,6 +328,122 @@ class Checker {
 }
 ```
 
-**To be finished.**
+The `checkExpr` method takes an AST expression and returns a value type.
+
+### 8.5.1 Checking symbol expressions
+
+```ts
+class Checker {
+    // ...
+    public checkExpr(expr: Expr): VType {
+        // ...
+        if (expr.kind.type === "sym") {
+            return this.checkSymExpr(expr);
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+Because checking symbols is a bit involved, we'll defer it to the `checkSymExpr` method.
+
+### 8.5.2 Checking literal expressions
+
+Literal expressions are all expressions with a direct value, including null, ints, bools and strings.
+
+```ts
+class Checker {
+    // ...
+    public checkExpr(expr: Expr): VType {
+        // ...
+        if (expr.kind.type === "null") {
+            return { type: "null" };
+        }
+        if (expr.kind.type === "int") {
+            return { type: "int" };
+        }
+        if (expr.kind.type === "bool") {
+            return { type: "bool" };
+        }
+        if (expr.kind.type === "string") {
+            return { type: "string" };
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+All literal types have a definite corresponding type.
+
+### 8.5.3 Checking binary expressions
+
+```ts
+const binaryOperations: {}[] = [
+
+];
+// ...
+class Checker {
+    // ...
+    public checkExpr(expr: Expr): VType {
+        // ...
+        if (expr.kind.type === "binary") {
+            const left = this.checkExpr(expr.kind.left);
+            const right = this.checkExpr(expr.kind.right);
+            if (left.type === "int" && right.type === "int") {
+                return { type: "int" };
+            }
+            if (left.type === "string" && right.type === "string") {
+                return {}
+            }
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+
+
+```ts
+class Checker {
+    // ...
+    public checkSymExpr(expr: Expr): VType {
+        // ...
+        if (expr.kind.type === "sym") {
+            if (expr.kind.defType === "let") {
+                const vtype = expr.kind.param.valueType;
+                if (vtype.type === "error") {
+                    return { type: "error" };
+                }
+                if (vtype.type === "unknown") {
+                    this.report("unknown type", pos);
+                    return { type: "error" };
+                }
+                return vtype;
+            }
+            if (expr.kind.defType === "fn") {
+                const params = expr.kind.stmt.params
+                    .map(param => this.checkType(param.etype!));
+                const returnType = this.checkType(expr.kind.stmt.returnType);
+                return { type: "fn", params, returnType };
+            }
+            if (expr.kind.defType === "fn_param") {
+                return this.checkType(expr.kind.param.etype!);
+            }
+            if (expr.kind.defType === "builtin") {
+                // ...
+            }
+            throw new Error(`unhandled defType ${expr.kind.defType}`);
+        }
+        // ...
+    }
+    // ...
+}
+```
+
+
+
 
 
