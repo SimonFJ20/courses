@@ -232,7 +232,25 @@ function vtypesEqual(a: VType, b: VType): boolean {
 
 For all types it applies, that the (kind) types must be equal. *Simple* types, such as `"int"` and `"bool"`, need just to be equal in (kind) type. For *complex* types, such as `"array"`, we also need to check the (value) type equality of the sub-types.
 
-### 8.2.2 Value types in AST
+### 8.2.2 Value type string representation
+
+We'll want a way to represent value types as strings, for use, for example, in error messages.
+
+```ts
+function vtypeToString(vtype: VType): string {
+    if (["error", "unknown", "null", "int", "string", "bool", "struct"].includes(vtype.type))
+        return vtype.type;
+    if (a.type === "array")
+        return `[${vtypeToString(vtype.inner)}]`;
+    if (a.type === "fn") {
+        const paramString = vtype.params.map(param => vtypeToString(param)).join(", ");
+        return `fn (${paramString}) -> ${vtypeToString(vtype.returnType)}`;
+    }
+    throw new Error(`unhandled vtype '${vtype.type}'`);
+}
+```
+
+### 8.2.3 Value types in AST
 
 When checking the types, we need to store the resulting value types. We'll choose to store these inside the AST itself. This means we'll mutate the AST in the type checker.
 
@@ -407,7 +425,7 @@ All literal types have a definite corresponding type.
 
 ### 8.5.3 Checking binary expressions
 
-There are many kinds 
+There are many kinds of binary expressions. To implement checking for them, we'll make a table of each combination. We'll assume that operand types are consistent.
 
 ```ts
 const simpleBinaryOperations: {
@@ -444,6 +462,11 @@ class Checker {
                     continue;
                 return operation.result ?? operation.operand;
             }
+            this.report(
+                `cannot apply binary operation '${expr.binaryType}' `
+                    + `on types '${vtypeToString(left)}' and '${vtypeToString(right)}'`,
+            );
+            return { type: "error" };
         }
         // ...
     }
@@ -451,6 +474,9 @@ class Checker {
 }
 ```
 
+#### Exercises
+
+1. Implement all previous types of binary operators.
 
 
 ```ts
