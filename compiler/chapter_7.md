@@ -95,11 +95,12 @@ class Resolver {
         if (expr.type !== "ident")
             throw new Error("expected ident");
         const ident = expr.kind.ident;
-        const { sym, ok: symFound } = syms.get(ident);
-        if (!symFound) {
+        const symResult = syms.get(ident);
+        if (!symResult.ok) {
             this.reportUseOfUndefined(ident, expr.pos, syms);
             return;
         }
+        const sym = symResult.sym;
         expr.kind = {
             type: "sym",
             ident,
@@ -138,10 +139,10 @@ class Resolver {
         // ...
         if (expr.kind.type === "block") {
             const childSyms = new Syms(syms);
-            for (const stmt of expr.stmts) {
+            for (const stmt of expr.kind.stmts) {
                 this.resolveStmt(stmt, childSyms);
             }
-            if (expr.expr) {
+            if (expr.kind.expr) {
                 this.resolveExpr(expr.expr, childSyms);
             }
             return;
@@ -267,7 +268,7 @@ Just like expressions, we traverse the AST and resolve every sub-statement and e
 
 ### Exercises
 
-1. Implement the rest of the expressions.
+1. Implement the rest of the expressions. The reason for this, is that all identifiers that are sub-expressions of other expressions, also need to be resolved.
 
 ## 7.10 Resolving AST
 
@@ -323,4 +324,4 @@ Print the last definition to help the user.
 
 ## Exercises
 
-1. \* Implement, so that `reportUseOfUndefined` searches for similar symbols, eg. using lLevenshtein distance.
+1. \* Implement, so that `reportUseOfUndefined` searches for similar symbols, eg. using Levenshtein distance.
