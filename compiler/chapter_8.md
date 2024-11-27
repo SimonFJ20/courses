@@ -192,7 +192,7 @@ The type checking process takes the program with some amount of explicit types. 
 ```ts
 type VType =
     | { type: "error" }
-    | { type: "unkown" }
+    | { type: "unknown" }
     | { type: "null" }
     | { type: "int" }
     | { type: "string" }
@@ -204,7 +204,35 @@ type VType =
 
 The error-type is for convenience of implementation, just like in the parser. The unknown-type is for type inference, when we don't yet know the type. the null-, int-, string-, bool- and struct-types are uniform in that all values of each type can be assigned to each type. There's no difference between to integers, although the values might differ, and the same for two struct values, even though they may contain a different set of fields. Array-types and function-types also contain their details, ie. inner type in arrays and params and return type in functions.
 
-### 8.2.1 Value types in AST
+### 8.2.1 Type equality
+
+We need a way, of checking the equality of two types. We'll do this, by creating a `vtypesEqual` function.
+
+```ts
+function vtypesEqual(a: VType, b: VType): boolean {
+    if (a.type !== b.type)
+        return false;
+    if (["error", "unknown", "null", "int", "string", "bool", "struct"].includes(a.type))
+        return true;
+    if (a.type === "array")
+        return valueTypesEqual(a.inner, b.inner);
+    if (a.type === "fn") {
+        if (a.params.length !== b.params.length)
+            return false;
+        for (let i = 0; i < a.params.length; ++i) {
+            if (!vtypesEqual(a.params[i], b.params[i])) {
+                return false;
+            }
+        }
+        return vtypesEqual(a.returnType, b.returnType);
+    }
+    return false;
+}
+```
+
+For all types it applies, that the (kind) types must be equal. *Simple* types, such as `"int"` and `"bool"`, need just to be equal in (kind) type. For *complex* types, such as `"array"`, we also need to check the (value) type equality of the sub-types.
+
+### 8.2.2 Value types in AST
 
 When checking the types, we need to store the resulting value types. We'll choose to store these inside the AST itself. This means we'll mutate the AST in the type checker.
 
@@ -379,9 +407,25 @@ All literal types have a definite corresponding type.
 
 ### 8.5.3 Checking binary expressions
 
-```ts
-const binaryOperations: {}[] = [
+There are many kinds 
 
+```ts
+const simpleBinaryOperations: {
+    binaryType: string,
+    operand: VType,
+    result?: VType,
+}[] = [
+    { binaryType: "+", operand: { type: "int" } },
+    { binaryType: "-", operand: { type: "int" } },
+    { binaryType: "*", operand: { type: "int" } },
+    // ...
+    { binaryType: "and", operand: { type: "bool" }, result: { type: "int" } },
+    // ...
+    { binaryType: "==", operand: { type: "null" }, result: { type: "bool" } },
+    { binaryType: "==", operand: { type: "int" }, result: { type: "bool" } },
+    { binaryType: "==", operand: { type: "string" }, result: { type: "bool" } },
+    { binaryType: "==", operand: { type: "bool" }, result: { type: "bool" } },
+    // ...
 ];
 // ...
 class Checker {
@@ -391,11 +435,14 @@ class Checker {
         if (expr.kind.type === "binary") {
             const left = this.checkExpr(expr.kind.left);
             const right = this.checkExpr(expr.kind.right);
-            if (left.type === "int" && right.type === "int") {
-                return { type: "int" };
-            }
-            if (left.type === "string" && right.type === "string") {
-                return {}
+            for (const operation of simpleBinaryOperations) {
+                if (operation.binaryType !== expr.binaryType)
+                    continue;
+                if (!vtypesEqual(operation.operand, left))
+                    continue;
+                if (!vtypesEqual(left, right))
+                    continue;
+                return operation.result ?? operation.operand;
             }
         }
         // ...
